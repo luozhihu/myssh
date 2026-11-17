@@ -1,12 +1,14 @@
 # myssh
 
+English | [简体中文](README.zh-CN.md)
+
 `myssh` is a TypeScript/Node.js rewrite of [sshmng](https://github.com/jim58246/sshmng),
 targeting zero-install distribution via `npx` and drop-in compatibility with
 `~/.sshmng/config.json` and the original MCP tool names.
 
 ## Status
 
-M4 (sftp file transfer) is complete:
+M6 (release readiness) is complete:
 
 - [x] Project scaffold, build, tests
 - [x] Config model, validation, atomic load/save
@@ -23,7 +25,9 @@ M4 (sftp file transfer) is complete:
 - [x] 1:N streaming `relay_transfer` without local disk
 - [x] `install` / `doctor` / Agent injection (M5)
 - [x] Standalone `ssh` and `file` CLI commands
-- [ ] npm publish and three-platform CI (M6)
+- [x] Three-platform CI matrix (macOS / Linux / Windows × Node 22/24)
+- [x] Coverage gate: config/loginflow/pty/session ≥ 80% lines
+- [x] npm publish workflow with provenance
 
 Connection forms:
 
@@ -143,8 +147,27 @@ myssh@latest`, so new releases are picked up automatically. `myssh version
 npm install
 npm run typecheck
 npm test
-npm run test:e2e    # build + CLI smoke checks against dist/
+npm run test:coverage  # core module line coverage gate (>= 80%)
+npm run test:e2e       # build + CLI smoke checks against dist/
+npm run align:output   # diff read-only CLI output against the Go binary
+npm run check:package  # assert the npm tarball contains only runtime files
 ```
+
+`npm run align:output` needs the upstream Go binary. Set `SSHMNG_GO_BIN` (or
+pass `--go-bin <path>`); it skips with a notice when the binary is absent, and
+`--require-go` makes the skip an error. CI builds upstream `sshmng` at a pinned
+commit and runs the alignment with `--require-go`.
+
+Releases are tag-driven:
+
+```bash
+npm version patch
+git push --follow-tags
+```
+
+The release workflow checks that the tag matches `package.json`, runs
+typecheck/tests/e2e/package checks via `prepublishOnly`, and publishes to npm
+with provenance. It needs an `NPM_TOKEN` repository secret.
 
 Design spec: `docs/superpowers/specs/2026-11-17-myssh-ts-rewrite-design.md`.
 M1 plan: `docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md`.
@@ -152,3 +175,9 @@ M2 plan: `docs/superpowers/plans/2026-11-17-myssh-m2-connection.md`.
 M3 plan: `docs/superpowers/plans/2026-11-18-myssh-m3-jumphosts.md`.
 M4 plan: `docs/superpowers/plans/2026-11-18-myssh-m4-sftp.md`.
 M5 plan: `docs/superpowers/plans/2026-11-18-myssh-m5-cli.md`.
+M6 plan: `docs/superpowers/plans/2026-11-18-myssh-m6-release.md`.
+
+## License
+
+MIT. `myssh` is a rewrite of the MIT-licensed `sshmng` project and retains its
+copyright notice. See [LICENSE](LICENSE).
