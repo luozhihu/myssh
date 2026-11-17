@@ -13,7 +13,7 @@ function ctx(homeDir: string, platform: NodeJS.Platform = "darwin", env: NodeJS.
 
 const entry = {
   command: "npx",
-  args: ["-y", "@lxx/myssh@latest", "mcp"],
+  args: ["-y", "@lzh-dev/myssh@latest", "mcp"],
   env: { SSHMNG_HOME: "/home/u/.sshmng" },
 };
 
@@ -21,12 +21,12 @@ describe("buildEntry", () => {
   it("uses npx latest by default and a pinned version when asked", () => {
     expect(buildEntry("/h", false)).toEqual({
       command: "npx",
-      args: ["-y", "@lxx/myssh@latest", "mcp"],
+      args: ["-y", "@lzh-dev/myssh@latest", "mcp"],
       env: { SSHMNG_HOME: "/h" },
     });
-    expect(buildEntry("/h", true, "1.2.3").args).toEqual(["-y", "@lxx/myssh@1.2.3", "mcp"]);
+    expect(buildEntry("/h", true, "1.2.3").args).toEqual(["-y", "@lzh-dev/myssh@1.2.3", "mcp"]);
     expect(expectedEntries("/h", "1.2.3").map((e) => e.args[1]))
-      .toEqual(["@lxx/myssh@latest", "@lxx/myssh@1.2.3"]);
+      .toEqual(["@lzh-dev/myssh@latest", "@lzh-dev/myssh@1.2.3"]);
   });
 });
 
@@ -156,7 +156,7 @@ describe("OpenCode injection", () => {
       const parsed = JSON.parse(await readFile(file, "utf8"));
       expect(parsed.mcp.sshmng).toEqual({
         type: "local",
-        command: ["npx", "-y", "@lxx/myssh@latest", "mcp"],
+        command: ["npx", "-y", "@lzh-dev/myssh@latest", "mcp"],
         environment: { SSHMNG_HOME: "/home/u/.sshmng" },
         enabled: true,
       });
