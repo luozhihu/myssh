@@ -36,7 +36,7 @@ Update tools: RFC 7396 JSON Merge Patch; null deletes, object merges or creates.
 
 Workflow:
 1. list_ssh_servers -> resolve the server name.
-2. login(name) -> {sid, server_name, sftp_available, mode, tags}.
+2. login(name) -> {sid, server_name, sftp_available, mode, tags}. Pattern A/B and login_flow run automatically; on LoginFlow failure the tool returns {error, login_trace}.
 3. run_in_session(sid, cmd) -> {output, exit_code, timed_out, truncated, total_bytes}.
 4. close_session(sid), or rely on idle timeout (default 5min via idle_timeout_s).
 

@@ -6,7 +6,7 @@ targeting zero-install distribution via `npx` and drop-in compatibility with
 
 ## Status
 
-M2 (SSH connection) is complete for direct connections:
+M3 (jumphosts and LoginFlow) is complete:
 
 - [x] Project scaffold, build, tests
 - [x] Config model, validation, atomic load/save
@@ -16,16 +16,23 @@ M2 (SSH connection) is complete for direct connections:
 - [x] TOFU `known_hosts`, 0600 key checks
 - [x] PTY sessions, command sentinel, `run_in_session`
 - [x] Session state, traces, `stat` / `get_trace`, raw send/read, sftp probe
-- [ ] Jumphosts, Pattern A/B, LoginFlow (M3)
+- [x] Transparent jumphosts (Pattern A, `ssh -J` semantics)
+- [x] Interactive bastions (Pattern B) driven by `login_flow`
 - [ ] sftp file transfer (M4)
 - [ ] `install` / `doctor` / Agent injection (M5)
 - [ ] npm publish and three-platform CI (M6)
 
-M2 limitations:
+M3 connection forms:
 
-- `login` supports direct connections only; `via` and `login_flow` return
-  `... not implemented yet (M3)`.
-- SFTP availability is probed at login but file transfer tools arrive in M4.
+- Direct (`no via`): SSH to the target; optional target `login_flow` after auth.
+- Pattern A (`via.ssh_j=true`): SSH to the jumphost, `direct-tcpip` tunnel,
+  second SSH handshake to the target; sftp is available on the target.
+- Pattern B (`via.ssh_j=false`): one PTY on the interactive bastion; jumphost
+  `login_flow` then target `login_flow` drive the menu; sftp reports `false`.
+- LoginFlow failures return `{"error": "... loginflow ...", "login_trace": [...]}`.
+
+M3 limitation: SFTP availability is probed at login but file transfer tools
+arrive in M4.
 
 ## Usage
 
@@ -75,3 +82,4 @@ npm run build
 Design spec: `docs/superpowers/specs/2026-11-17-myssh-ts-rewrite-design.md`.
 M1 plan: `docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md`.
 M2 plan: `docs/superpowers/plans/2026-11-17-myssh-m2-connection.md`.
+M3 plan: `docs/superpowers/plans/2026-11-18-myssh-m3-jumphosts.md`.
