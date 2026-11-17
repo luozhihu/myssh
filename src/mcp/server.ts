@@ -23,7 +23,12 @@ import {
   statTool,
 } from "./tools_session.js";
 import { readInSessionTool, sendInSessionTool } from "./tools_raw.js";
-import { downloadTool, uploadTool } from "./tools_file.js";
+import {
+  downloadDirTool,
+  downloadTool,
+  uploadDirTool,
+  uploadTool,
+} from "./tools_file.js";
 
 const instructions = `SSH session manager: servers, jumphosts, proxies, sessions.
 
@@ -64,6 +69,21 @@ const updateSchema = {
   name: z.string().describe("entity name; if not exist, create"),
   patch: z.any().describe(
     "RFC 7396 JSON Merge Patch; null deletes the entity, object merges (or creates if name not found)",
+  ),
+};
+
+const dirTransferSchema = {
+  sid: z.string(),
+  src: z.string(),
+  dst: z.string(),
+  conflict: z.string().optional().describe(
+    "optional, default 'overwrite'. One of: overwrite, skip, rename",
+  ),
+  concurrency: z.number().int().optional().describe(
+    "optional, default 4. Number of files to transfer in parallel",
+  ),
+  timeout_ms: z.number().int().optional().describe(
+    "optional, 0 = default 300000 (300s). Per-file timeout",
   ),
 };
 
@@ -210,6 +230,16 @@ export function createMcpServer(svc: Service): McpServer {
       ),
     },
   }, (args) => downloadTool(svc, args));
+
+  server.registerTool("upload_dir", {
+    description: "Upload a local directory tree to the remote host via sftp. Walks the local tree, creates remote dirs (MkdirAll), transfers files concurrently (default 4). Conflict policy: overwrite (default) / skip / rename. Per-file errors don't abort the transfer; aggregated in result. Requires sftp_available=true on the session. Note: partial failures return ok:false in the result body with isError not set; check the ok field, not the MCP error flag.",
+    inputSchema: dirTransferSchema,
+  }, (args) => uploadDirTool(svc, args));
+
+  server.registerTool("download_dir", {
+    description: "Download a remote directory tree to local via sftp. Walks the remote tree, creates local dirs (MkdirAll), transfers files concurrently (default 4). Conflict policy: overwrite (default) / skip / rename. Per-file errors don't abort the transfer; aggregated in result. Requires sftp_available=true on the session. Note: partial failures return ok:false in the result body with isError not set; check the ok field, not the MCP error flag.",
+    inputSchema: dirTransferSchema,
+  }, (args) => downloadDirTool(svc, args));
 
   return server;
 }

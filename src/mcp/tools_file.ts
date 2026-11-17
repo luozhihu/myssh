@@ -2,6 +2,7 @@ import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { open } from "node:fs/promises";
 import type { Readable, Writable } from "node:stream";
+import { parseConflictPolicy, type DirTransferOutcome } from "../sftp/types.js";
 import type { Service } from "./service.js";
 import { errorResult, textResult } from "./result.js";
 
@@ -72,6 +73,60 @@ export async function downloadTool(
       dst.off("error", onError);
       dst.destroy();
     }
+  } catch (err) {
+    return errorResult(message(err));
+  }
+}
+
+function dirBody(
+  sid: string,
+  outcome: DirTransferOutcome,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    sid,
+    ok: !outcome.error,
+    bytes: outcome.result.bytes,
+    files: outcome.result.files,
+    skipped: outcome.result.skipped,
+    renamed: outcome.result.renamed,
+    timed_out: outcome.result.timedOut,
+  };
+  if (outcome.error) body.err = outcome.error.message;
+  return body;
+}
+
+export interface DirTransferArgs {
+  sid: string;
+  src: string;
+  dst: string;
+  conflict?: string;
+  concurrency?: number;
+  timeout_ms?: number;
+}
+
+export async function uploadDirTool(svc: Service, args: DirTransferArgs) {
+  try {
+    const session = svc.manager.get(args.sid);
+    const outcome = await session.uploadDir(args.src, args.dst, {
+      conflict: parseConflictPolicy(args.conflict),
+      concurrency: args.concurrency ?? 0,
+      timeoutMs: args.timeout_ms ?? 0,
+    });
+    return textResult(dirBody(args.sid, outcome));
+  } catch (err) {
+    return errorResult(message(err));
+  }
+}
+
+export async function downloadDirTool(svc: Service, args: DirTransferArgs) {
+  try {
+    const session = svc.manager.get(args.sid);
+    const outcome = await session.downloadDir(args.src, args.dst, {
+      conflict: parseConflictPolicy(args.conflict),
+      concurrency: args.concurrency ?? 0,
+      timeoutMs: args.timeout_ms ?? 0,
+    });
+    return textResult(dirBody(args.sid, outcome));
   } catch (err) {
     return errorResult(message(err));
   }

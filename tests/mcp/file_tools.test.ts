@@ -125,3 +125,90 @@ describe("upload/download MCP tools", () => {
     expect(upload.json().ok).toBe(false);
   });
 });
+
+describe("upload_dir/download_dir MCP tools", () => {
+  it("uploads and downloads a tree with the documented result fields", async () => {
+    const { server, client, local } = await startApp();
+    const sid = (await call(client, "login", { name: "local" })).json().sid;
+
+    const src = path.join(local, "tree");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(path.join(src, "sub"), { recursive: true });
+    await writeFile(path.join(src, "a.txt"), "alpha");
+    await writeFile(path.join(src, "sub", "b.txt"), "bravo");
+
+    const up = await call(client, "upload_dir", { sid, src, dst: "/tree" });
+    expect(up.isError).toBe(false);
+    expect(up.json()).toEqual({
+      sid, ok: true, bytes: 10, files: 2, skipped: 0, renamed: 0, timed_out: 0,
+    });
+    expect(await readFile(path.join(server.sftpRoot, "tree/sub/b.txt"), "utf8")).toBe("bravo");
+
+    const dst = path.join(local, "back");
+    const down = await call(client, "download_dir", { sid, src: "/tree", dst });
+    expect(down.json()).toEqual({
+      sid, ok: true, bytes: 10, files: 2, skipped: 0, renamed: 0, timed_out: 0,
+    });
+    expect(await readFile(path.join(dst, "sub", "b.txt"), "utf8")).toBe("bravo");
+  });
+
+  it("propagates the skip conflict policy", async () => {
+    const { server, client, local } = await startApp();
+    const sid = (await call(client, "login", { name: "local" })).json().sid;
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(path.join(server.sftpRoot, "r"), { recursive: true });
+    await writeFile(path.join(server.sftpRoot, "r/a.txt"), "old");
+    const src = path.join(local, "tree");
+    await mkdir(src);
+    await writeFile(path.join(src, "a.txt"), "new");
+
+    const up = await call(client, "upload_dir", {
+      sid, src, dst: "/r", conflict: "skip",
+    });
+    expect(up.json()).toEqual({
+      sid, ok: true, bytes: 0, files: 0, skipped: 1, renamed: 0, timed_out: 0,
+    });
+    expect(await readFile(path.join(server.sftpRoot, "r/a.txt"), "utf8")).toBe("old");
+  });
+
+  it("returns ok:false in the body (not isError) when sftp is unavailable", async () => {
+    const { client, local } = await startApp({ allowSftp: false });
+    const sid = (await call(client, "login", { name: "local" })).json().sid;
+    const src = path.join(local, "tree");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(src);
+
+    const up = await call(client, "upload_dir", { sid, src, dst: "/r" });
+    expect(up.isError).toBe(false);
+    expect(up.json()).toMatchObject({
+      sid, ok: false, bytes: 0, files: 0, skipped: 0, renamed: 0, timed_out: 0,
+      err: "sftp not available for this session",
+    });
+  });
+
+  it("reports per-file timeouts as a partial result", async () => {
+    const { client, local } = await startApp({ allowSftp: true, sftpDelayMs: 200 });
+    const sid = (await call(client, "login", { name: "local" })).json().sid;
+    const src = path.join(local, "tree");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(src);
+    await writeFile(path.join(src, "a.txt"), "alpha");
+    await writeFile(path.join(src, "b.txt"), "bravo");
+
+    const up = await call(client, "upload_dir", {
+      sid, src, dst: "/slow", timeout_ms: 50,
+    });
+    expect(up.isError).toBe(false);
+    expect(up.json()).toMatchObject({
+      sid, ok: false, bytes: 0, files: 0, timed_out: 2,
+    });
+    expect(up.json().err).toContain("timed out");
+  });
+
+  it("returns isError for an unknown sid", async () => {
+    const { client, local } = await startApp();
+    const up = await call(client, "upload_dir", { sid: "nope", src: local, dst: "/x" });
+    expect(up.isError).toBe(true);
+    expect(up.text).toContain('session "nope" not found');
+  });
+});
