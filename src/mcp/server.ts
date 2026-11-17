@@ -54,7 +54,14 @@ Sessions:
 - send_in_session interprets C-style escapes: \\\\r = Enter, \\\\n, \\\\t, \\\\e = ESC, \\\\uXXXX, \\\\\\\\ = literal backslash.
 - read_in_session absorbs output while bytes keep arriving (<400ms gaps); use wait_ms 3-10s, do not poll with small values.
 - run_in_session timeout -> auto Ctrl-C + 3s drain. If drain fails, session is closed; re-login.
-- After close, command traces remain queryable via get_trace for 10 minutes.`;
+- After close, command traces remain queryable via get_trace for 10 minutes.
+
+File transfer:
+- login -> sftp_available. Direct and Pattern A: true; Pattern B: false.
+- upload/download: single files, atomic remote/local writes, timeout via timeout_ms (default 300s). Partial timeout returns {ok:false, timed_out:true} without an MCP error.
+- upload_dir/download_dir: recursive, default concurrency 4, conflict overwrite|skip|rename. Per-file failures aggregate into {ok:false, err} with IsError not set.
+- relay_transfer: stream src_sid:src_path to N sessions sharing dst_path; the source is read once. Requires sftp on every participant; per-destination failures are isolated.
+- upload/download "sftp not available" -> check stat.sftp_available first.`;
 
 const listSchema = {
   query: z.string().optional().describe(
