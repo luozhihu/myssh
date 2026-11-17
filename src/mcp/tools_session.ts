@@ -1,5 +1,5 @@
-import type { Proxy, SSHServer } from "../config/types.js";
-import { setupDirect } from "../ssh/login.js";
+import type { Jumphost, Proxy } from "../config/types.js";
+import { setupServer } from "../ssh/login.js";
 import { LoginFlowError } from "../ssh/types.js";
 import { randomSID } from "../util/random.js";
 import type { Service } from "./service.js";
@@ -17,20 +17,30 @@ export async function loginTool(
     const cfg = await svc.store.load();
     const server = cfg.servers.find((item) => item.name === args.name);
     if (!server) return errorResult(`ssh server ${JSON.stringify(args.name)} not found`);
-    if (server.via) return errorResult("via jumphosts not implemented yet (M3)");
-    if (server.login_flow && Object.keys(server.login_flow).length > 0) {
-      return errorResult("login_flow not implemented yet (M3)");
+
+    let jump: Jumphost | undefined;
+    if (server.via) {
+      jump = cfg.jumphosts.find((item) => item.name === server.via);
+      if (!jump) return errorResult(`jumphost ${JSON.stringify(server.via)} not found`);
     }
-    let proxy: Proxy | undefined;
+
+    let serverProxy: Proxy | undefined;
     if (server.proxy) {
-      proxy = cfg.proxies.find((item) => item.name === server.proxy);
-      if (!proxy) return errorResult(`proxy ${JSON.stringify(server.proxy)} not found`);
+      serverProxy = cfg.proxies.find((item) => item.name === server.proxy);
+      if (!serverProxy) return errorResult(`proxy ${JSON.stringify(server.proxy)} not found`);
+    }
+    let jumpProxy: Proxy | undefined;
+    if (jump?.proxy) {
+      jumpProxy = cfg.proxies.find((item) => item.name === jump!.proxy);
+      if (!jumpProxy) return errorResult(`proxy ${JSON.stringify(jump.proxy)} not found`);
     }
 
     const sid = randomSID();
-    const setup = await setupDirect({
+    const setup = await setupServer({
       server,
-      proxy,
+      jump,
+      serverProxy,
+      jumpProxy,
       sid,
       knownHosts: svc.knownHosts,
       logger: svc.logger,

@@ -1,17 +1,21 @@
 import type { Client, ClientChannel, TerminalModes } from "ssh2";
-import type { Proxy, SSHServer } from "../config/types.js";
+import type { Jumphost, LoginAction, Proxy, SSHServer } from "../config/types.js";
 import { nullLogger, type Logger } from "../log.js";
 import { PtyConn } from "../pty/pty_conn.js";
 import type { PtyTransport } from "../pty/transport.js";
 import { Dialer } from "./dialer.js";
 import type { KnownHostsStore } from "./known_hosts.js";
-import type { LoginTraceEntry } from "./types.js";
+import { LoginFlowError, type LoginTraceEntry } from "./types.js";
 
 const OPEN_PTY_TIMEOUT_MS = 15_000;
 const SFTP_PROBE_TIMEOUT_MS = 5_000;
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function hasFlow(flow: Record<string, LoginAction> | undefined): boolean {
+  return !!flow && Object.keys(flow).length > 0;
 }
 
 /** ssh2 channel → PtyTransport。负责数据/关闭事件与 sftp 可用性探测。 */
@@ -24,6 +28,7 @@ class SshChannelTransport implements PtyTransport {
     private readonly client: Client,
     private readonly channel: ClientChannel,
     private readonly logger: Logger,
+    private readonly jumpClient?: Client,
   ) {
     channel.on("data", (data: Buffer) => {
       for (const handler of this.dataHandlers) handler(data);
@@ -80,6 +85,9 @@ class SshChannelTransport implements PtyTransport {
     this.fireClose();
     try { this.channel.end(); } catch { /* ignore */ }
     try { this.client.end(); } catch { /* ignore */ }
+    if (this.jumpClient) {
+      try { this.jumpClient.end(); } catch { /* ignore */ }
+    }
   }
 
   private fireClose(err?: Error): void {
@@ -94,6 +102,7 @@ export async function openPty(
   client: Client,
   sid: string,
   logger: Logger = nullLogger,
+  jumpClient?: Client,
 ): Promise<PtyConn> {
   const term = process.env.TERM || "xterm-256color";
   // @types/ssh2 声明了命名 key，但运行时需要 numeric opcode：
@@ -118,26 +127,80 @@ export async function openPty(
   });
   try {
     const channel = await Promise.race([opened, timedOut]);
-    return new PtyConn(new SshChannelTransport(client, channel, logger), sid, { logger });
+    return new PtyConn(
+      new SshChannelTransport(client, channel, logger, jumpClient),
+      sid,
+      { logger },
+    );
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
-export interface DirectSetupResult {
+export interface SetupResult {
   conn: PtyConn;
   loginTrace: LoginTraceEntry[];
   sftpAvailable: boolean;
 }
 
-/** 直连：dial → open pty → raw 标记或 detect+RC → sftp 探测。 */
-export async function setupDirect(options: {
-  server: SSHServer;
-  proxy?: Proxy;
+/** 兼容 M2 命名。 */
+export type DirectSetupResult = SetupResult;
+
+interface SetupOptions {
   sid: string;
   knownHosts: KnownHostsStore;
   logger?: Logger;
-}): Promise<DirectSetupResult> {
+}
+
+async function runFlow(
+  conn: PtyConn,
+  flow: Record<string, LoginAction> | undefined,
+  entry: string | undefined,
+  maxSteps: number | undefined,
+  globalTimeoutMs: number | undefined,
+  stage: string,
+): Promise<LoginTraceEntry[]> {
+  if (!hasFlow(flow)) return [];
+  const result = await conn.runLoginFlow(flow!, entry ?? "", {
+    maxSteps,
+    globalTimeoutMs,
+  });
+  if (result.error) {
+    throw new LoginFlowError(stage, result.trace, `${stage}: ${result.error.message}`);
+  }
+  return result.trace;
+}
+
+/** 所有 LoginFlow 之后的公共尾部：raw 标记或 DetectShell + RC 注入。 */
+async function finishLogin(
+  conn: PtyConn,
+  server: SSHServer,
+  trace: LoginTraceEntry[],
+  stage: string,
+): Promise<void> {
+  if (server.raw) {
+    conn.markRaw();
+    return;
+  }
+  await conn.detectShell();
+  try {
+    trace.push(await conn.injectRC());
+  } catch (err) {
+    if (err instanceof LoginFlowError) {
+      throw new LoginFlowError(
+        "rc_inject",
+        [...trace, ...err.trace],
+        `${stage}: ${err.message}`,
+      );
+    }
+    throw err;
+  }
+}
+
+/** 直连：dial → open pty → LoginFlow（可选）→ raw 或 detect+RC → sftp 探测。 */
+export async function setupDirect(
+  options: SetupOptions & { server: SSHServer; proxy?: Proxy },
+): Promise<SetupResult> {
   const logger = options.logger ?? nullLogger;
   const server = options.server;
   const dialer = new Dialer(options.knownHosts, logger);
@@ -165,12 +228,11 @@ export async function setupDirect(options: {
 
   const loginTrace: LoginTraceEntry[] = [];
   try {
-    if (server.raw) {
-      conn.markRaw();
-    } else {
-      await conn.detectShell();
-      loginTrace.push(await conn.injectRC());
-    }
+    loginTrace.push(...await runFlow(
+      conn, server.login_flow, server.login_entry,
+      server.max_steps, server.global_timeout_ms, "direct",
+    ));
+    await finishLogin(conn, server, loginTrace, "direct");
   } catch (err) {
     conn.close();
     throw err;
@@ -178,4 +240,152 @@ export async function setupDirect(options: {
 
   const sftpAvailable = await conn.probeSftp();
   return { conn, loginTrace, sftpAvailable };
+}
+
+/**
+ * Pattern A：jumphost dial → forwardOut direct-tcpip → target dial →
+ * open pty（绑定 jump 生命周期）→ 可选 target LoginFlow → detect+RC → sftp。
+ */
+export async function setupPatternA(
+  options: SetupOptions & {
+    server: SSHServer;
+    jump: Jumphost;
+    jumpProxy?: Proxy;
+  },
+): Promise<SetupResult> {
+  const logger = options.logger ?? nullLogger;
+  const server = options.server;
+  const jump = options.jump;
+  const dialer = new Dialer(options.knownHosts, logger);
+
+  let jumpClient: Client;
+  try {
+    jumpClient = await dialer.dial({
+      addr: jump.addr,
+      user: jump.user,
+      auth: jump.auth,
+      proxy: options.jumpProxy,
+      serverName: jump.name,
+      hostKeyVerify: jump.host_key_verify !== false,
+    });
+  } catch (err) {
+    throw new Error(`ssh connect to jumphost ${jump.addr}: ${message(err)}`);
+  }
+
+  let targetClient: Client;
+  try {
+    targetClient = await dialer.dialThrough(jumpClient, {
+      addr: server.addr,
+      user: server.user,
+      auth: server.auth,
+      serverName: server.name,
+      hostKeyVerify: server.host_key_verify !== false,
+    });
+  } catch (err) {
+    try { jumpClient.end(); } catch { /* ignore */ }
+    throw new Error(
+      `ssh connect to target ${server.addr} through jumphost: ${message(err)}`,
+    );
+  }
+
+  let conn: PtyConn;
+  try {
+    conn = await openPty(targetClient, options.sid, logger, jumpClient);
+  } catch (err) {
+    try { targetClient.end(); } catch { /* ignore */ }
+    try { jumpClient.end(); } catch { /* ignore */ }
+    throw new Error(`setup pty: ${message(err)}`);
+  }
+
+  const loginTrace: LoginTraceEntry[] = [];
+  try {
+    loginTrace.push(...await runFlow(
+      conn, server.login_flow, server.login_entry,
+      server.max_steps, server.global_timeout_ms, "patternA",
+    ));
+    await finishLogin(conn, server, loginTrace, "patternA");
+  } catch (err) {
+    conn.close();
+    throw err;
+  }
+
+  // Pattern A 的 SFTP 通道经 direct-tcpip 落在 target 上。
+  const sftpAvailable = await conn.probeSftp();
+  return { conn, loginTrace, sftpAvailable };
+}
+
+/**
+ * Pattern B：dial bastion → open pty → jumphost LoginFlow → target LoginFlow
+ * → detect+RC。两段 flow 共用同一 PTY；sftp 恒不可用（通道落在 bastion）。
+ */
+export async function setupPatternB(
+  options: SetupOptions & {
+    server: SSHServer;
+    jump: Jumphost;
+    jumpProxy?: Proxy;
+  },
+): Promise<SetupResult> {
+  const logger = options.logger ?? nullLogger;
+  const server = options.server;
+  const jump = options.jump;
+  const dialer = new Dialer(options.knownHosts, logger);
+
+  let client: Client;
+  try {
+    client = await dialer.dial({
+      addr: jump.addr,
+      user: jump.user,
+      auth: jump.auth,
+      proxy: options.jumpProxy,
+      serverName: jump.name,
+      hostKeyVerify: jump.host_key_verify !== false,
+    });
+  } catch (err) {
+    throw new Error(`ssh connect to jumphost ${jump.addr}: ${message(err)}`);
+  }
+
+  let conn: PtyConn;
+  try {
+    conn = await openPty(client, options.sid, logger);
+  } catch (err) {
+    try { client.end(); } catch { /* ignore */ }
+    throw new Error(`setup pty: ${message(err)}`);
+  }
+
+  const loginTrace: LoginTraceEntry[] = [];
+  try {
+    loginTrace.push(...await runFlow(
+      conn, jump.login_flow, jump.login_entry,
+      jump.max_steps, jump.global_timeout_ms, "jumphost",
+    ));
+    loginTrace.push(...await runFlow(
+      conn, server.login_flow, server.login_entry,
+      server.max_steps, server.global_timeout_ms, "target",
+    ));
+    await finishLogin(conn, server, loginTrace, "patternB");
+  } catch (err) {
+    conn.close();
+    throw err;
+  }
+
+  // SSH client 是到 bastion 的：SFTP 探测成功也会误导（文件落到 bastion）。
+  return { conn, loginTrace, sftpAvailable: false };
+}
+
+/** 按 server.via 选择直连 / Pattern A / Pattern B。 */
+export async function setupServer(
+  options: SetupOptions & {
+    server: SSHServer;
+    jump?: Jumphost;
+    serverProxy?: Proxy;
+    jumpProxy?: Proxy;
+  },
+): Promise<SetupResult> {
+  if (!options.jump) {
+    return setupDirect(options);
+  }
+  if (options.jump.ssh_j) {
+    return setupPatternA({ ...options, jump: options.jump });
+  }
+  return setupPatternB({ ...options, jump: options.jump });
 }

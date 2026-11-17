@@ -8,6 +8,27 @@ export function stripANSI(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
+/** 剥离 ANSI 并给出 stripped 字节 → raw 字节末尾偏移的映射。 */
+export function stripANSIWithPos(text: string): { stripped: string; posMap: number[] } {
+  const chars: string[] = [];
+  const posMap: number[] = [0];
+  const re = new RegExp(ANSI_RE.source, "g");
+  let lastEnd = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    for (let i = lastEnd; i < match.index; i += 1) {
+      chars.push(text[i]!);
+      posMap.push(i + 1);
+    }
+    lastEnd = match.index + match[0].length;
+  }
+  for (let i = lastEnd; i < text.length; i += 1) {
+    chars.push(text[i]!);
+    posMap.push(i + 1);
+  }
+  return { stripped: chars.join(""), posMap };
+}
+
 /** PTY 原始流 → 用户可读输出；只清除本 sid 的 sentinel。 */
 export function cleanOutput(raw: string, sid: string): string {
   let text = stripANSI(raw);
