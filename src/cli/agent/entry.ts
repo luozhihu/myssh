@@ -1,3 +1,4 @@
+import { packageSpec } from "../../pkg.js";
 import { VERSION } from "../../version.js";
 import type { MCPEntry } from "./types.js";
 
@@ -9,7 +10,7 @@ export function buildEntry(
 ): MCPEntry {
   return {
     command: "npx",
-    args: ["-y", pin ? `myssh@${version}` : "myssh@latest", "mcp"],
+    args: ["-y", packageSpec(pin, version), "mcp"],
     env: { SSHMNG_HOME: home },
   };
 }
