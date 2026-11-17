@@ -5,10 +5,17 @@ import {
   type RawReadResult,
   type RunOutcome,
 } from "../ssh/types.js";
+import type { LoginAction } from "../config/types.js";
+import {
+  runLoginFlow,
+  type LoginFlowPty,
+  type LoginFlowRead,
+  type LoginFlowResult,
+} from "../loginflow/executor.js";
 import { nullLogger, type Logger } from "../log.js";
 import { randomSID } from "../util/random.js";
 import { traceTimestamp } from "../util/time.js";
-import { cleanOutput } from "./normalize.js";
+import { cleanOutput, stripANSIWithPos } from "./normalize.js";
 import { ByteQueue } from "./queue.js";
 import { extractExitCode, truncateOutput } from "./sentinel.js";
 import { buildRC, parseShellDetect } from "./shell_detect.js";
@@ -20,6 +27,7 @@ const SET_TOKEN_TIMEOUT_MS = 2_000;
 const SHELL_DETECT_TIMEOUT_MS = 5_000;
 const RC_INJECT_TIMEOUT_MS = 5_000;
 const RAW_QUIET_GAP_MS = 400;
+const LOGIN_FLOW_QUIET_MS = 200;
 
 export interface PtyConnOptions {
   cmdTimeoutMs?: number;
@@ -28,6 +36,7 @@ export interface PtyConnOptions {
   shellDetectTimeoutMs?: number;
   rcInjectTimeoutMs?: number;
   rawQuietGapMs?: number;
+  loginFlowQuietMs?: number;
   logger?: Logger;
 }
 
@@ -44,7 +53,7 @@ function tokenRe(sid: string, token: string): RegExp {
 }
 
 /** 包装 SSH channel 的 PTY，负责 sentinel 命令执行与 raw 终端原语。 */
-export class PtyConn {
+export class PtyConn implements LoginFlowPty {
   private readonly queue = new ByteQueue();
   private pushback: Buffer = Buffer.alloc(0);
   private closedFlag = false;
@@ -88,6 +97,98 @@ export class PtyConn {
 
   markRaw(): void {
     this.shellType = "raw";
+  }
+
+  /** LoginFlow 阶段：向 PTY 写入任意文本。 */
+  send(data: string): void {
+    this.requireOpen();
+    this.logger.debug("loginflow send", {
+      bytes: Buffer.byteLength(data),
+      sid: this.sid,
+      text: data,
+    });
+    this.transport.write(data);
+  }
+
+  /**
+   * LoginFlow 阶段读取：累积输出并用 matchers（ANSI 过滤后）匹配。
+   * 命中返回截至 match 末尾的原始字节，trailing 存入 pushback 供下一段使用。
+   * matchers 为空时按静默期 heuristic 返回。
+   */
+  async read(deadline: number, matchers: RegExp[]): Promise<LoginFlowRead> {
+    this.requireOpen();
+    let buf = this.pushback;
+    this.pushback = Buffer.alloc(0);
+
+    const initial = this.matchRaw(buf, matchers);
+    if (initial) {
+      this.pushback = buf.subarray(initial.end);
+      return {
+        output: buf.subarray(0, initial.end).toString("latin1"),
+        matchedIdx: initial.idx,
+        timedOut: false,
+      };
+    }
+
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        return { output: buf.toString("latin1"), matchedIdx: -1, timedOut: true };
+      }
+      if (this.queue.size > 0) {
+        buf = Buffer.concat([buf, this.queue.drain()]);
+        const found = this.matchRaw(buf, matchers);
+        if (found) {
+          this.pushback = buf.subarray(found.end);
+          return {
+            output: buf.subarray(0, found.end).toString("latin1"),
+            matchedIdx: found.idx,
+            timedOut: false,
+          };
+        }
+        continue;
+      }
+      if (this.queue.closed) {
+        return { output: buf.toString("latin1"), matchedIdx: -1, timedOut: true };
+      }
+      const quiet = this.options.loginFlowQuietMs ?? LOGIN_FLOW_QUIET_MS;
+      await this.queue.wait(
+        matchers.length === 0 ? Math.min(remaining, quiet) : remaining,
+      );
+      if (this.queue.size === 0 && matchers.length === 0 && !this.queue.closed) {
+        return { output: buf.toString("latin1"), matchedIdx: -1, timedOut: false };
+      }
+    }
+  }
+
+  async runLoginFlow(
+    flow: Record<string, LoginAction>,
+    entry: string,
+    options: { maxSteps?: number; globalTimeoutMs?: number } = {},
+  ): Promise<LoginFlowResult> {
+    if (Object.keys(flow).length === 0) return { trace: [] };
+    return runLoginFlow(this, flow, entry, {
+      maxSteps: options.maxSteps,
+      globalTimeoutMs: options.globalTimeoutMs,
+      logger: this.logger,
+    });
+  }
+
+  /** 在 stripped 输出上匹配；命中返回 matcher 下标和 raw 字节末尾位置。 */
+  private matchRaw(
+    buf: Buffer,
+    matchers: RegExp[],
+  ): { idx: number; end: number } | null {
+    if (matchers.length === 0) return null;
+    const { stripped, posMap } = stripANSIWithPos(buf.toString("latin1"));
+    for (let idx = 0; idx < matchers.length; idx += 1) {
+      const match = matchers[idx]!.exec(stripped);
+      if (match) {
+        const end = posMap[match.index + match[0].length] ?? buf.length;
+        return { idx, end };
+      }
+    }
+    return null;
   }
 
   async detectShell(): Promise<string> {
