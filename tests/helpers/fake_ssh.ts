@@ -5,6 +5,18 @@ import type { Connection, Server as SshServer } from "ssh2";
 
 const { Server, utils } = ssh2;
 
+/**
+ * ssh2 的 generateKeyPairSync 有 ~0.3% 概率产出无法 parse 的 ed25519 私钥，
+ * 会造成随机测试失败；重试直到 parseKey 成功。
+ */
+export function generateEd25519Key(): { private: string; public: string } {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const pair = utils.generateKeyPairSync("ed25519");
+    if (!(utils.parseKey(pair.private) instanceof Error)) return pair;
+  }
+  throw new Error("failed to generate a parseable ed25519 key after 20 attempts");
+}
+
 export interface FakeSshOptions {
   user?: string;
   password?: string;
@@ -185,7 +197,7 @@ export class FakeSshServer {
   ) {}
 
   static async start(opts: FakeSshOptions = {}): Promise<FakeSshServer> {
-    const { private: hostKey } = utils.generateKeyPairSync("ed25519");
+    const { private: hostKey } = generateEd25519Key();
     const parsedHostKey = utils.parseKey(hostKey);
     if (parsedHostKey instanceof Error) throw parsedHostKey;
     const hostKeyBase64 = parsedHostKey.getPublicSSH().toString("base64");

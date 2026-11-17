@@ -6,14 +6,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import ssh2 from "ssh2";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dialer, loadAuth } from "../../src/ssh/dialer.js";
 import { KnownHostsStore } from "../../src/ssh/known_hosts.js";
 import { tempDir } from "../helpers/config.js";
-import { FakeSshServer } from "../helpers/fake_ssh.js";
-
-const { utils } = ssh2;
+import { FakeSshServer, generateEd25519Key } from "../helpers/fake_ssh.js";
 
 describe("loadAuth", () => {
   it("requires password or private key", () => {
@@ -32,7 +29,7 @@ describe("loadAuth", () => {
     if (process.platform === "win32") return;
     const dir = process.env.TMPDIR ?? "/tmp";
     const file = path.join(dir, `myssh-key-${process.pid}-${Date.now()}`);
-    const { private: key } = utils.generateKeyPairSync("ed25519");
+    const { private: key } = generateEd25519Key();
     writeFileSync(file, key);
     chmodSync(file, 0o644);
     try {
@@ -114,7 +111,7 @@ describe("Dialer", () => {
 
   it("authenticates with a private key", async () => {
     const keyPath = path.join(dir, "id_ed25519");
-    const { private: key } = utils.generateKeyPairSync("ed25519");
+    const { private: key } = generateEd25519Key();
     writeFileSync(keyPath, key, { mode: 0o600 });
     chmodSync(keyPath, 0o600);
     await server.close();

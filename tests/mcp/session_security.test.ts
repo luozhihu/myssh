@@ -10,7 +10,11 @@ import { Store } from "../../src/config/store.js";
 import { createMcpServer } from "../../src/mcp/server.js";
 import { Service } from "../../src/mcp/service.js";
 import { tempDir, writeConfig } from "../helpers/config.js";
-import { FakeSshServer, type FakeSshOptions } from "../helpers/fake_ssh.js";
+import {
+  FakeSshServer,
+  generateEd25519Key,
+  type FakeSshOptions,
+} from "../helpers/fake_ssh.js";
 
 const { utils } = ssh2;
 
@@ -122,7 +126,7 @@ describe("session security and transport options", () => {
     expect(first.isError).toBe(false);
     await call(client, "close_session", { sid: first.json().sid });
 
-    const other = utils.generateKeyPairSync("ed25519");
+    const other = generateEd25519Key();
     const parsed = utils.parseKey(other.private);
     if (parsed instanceof Error) throw parsed;
     writeFileSync(
