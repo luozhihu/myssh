@@ -3,7 +3,7 @@ import { goTimestamp } from "../util/time.js";
 import { isConnLost, PtyUnusableError } from "../ssh/errors.js";
 import type { LoginTraceEntry, RawReadResult, RunOutcome } from "../ssh/types.js";
 import { nullLogger, type Logger } from "../log.js";
-import { downloadDir, uploadDir } from "../sftp/dir.js";
+import { downloadDir, remoteDirTotals, uploadDir } from "../sftp/dir.js";
 import {
   emptyDirResult,
   SftpUnavailableError,
@@ -259,12 +259,13 @@ export class Session {
     src: Readable,
     remotePath: string,
     timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
   ): Promise<TransferOutcome> {
     return this.withTransfer(async (sftp) => {
       if (!this.sftpAvail || !sftp) {
         return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
       }
-      return sftp.upload(src, remotePath, timeoutMs);
+      return sftp.upload(src, remotePath, timeoutMs, onBytes);
     });
   }
 
@@ -279,6 +280,20 @@ export class Session {
         return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
       }
       return sftp.download(remotePath, dst, timeoutMs, onBytes);
+    });
+  }
+
+  async downloadToFile(
+    remotePath: string,
+    localPath: string,
+    timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
+      }
+      return sftp.downloadToFile(remotePath, localPath, timeoutMs, onBytes);
     });
   }
 
@@ -305,6 +320,15 @@ export class Session {
         return { result: emptyDirResult(), error: new SftpUnavailableError() };
       }
       return downloadDir(sftp, remoteDir, localDir, options);
+    });
+  }
+
+  async remoteDirTotals(
+    remoteDir: string,
+  ): Promise<{ bytes: number; files: number }> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) return { bytes: 0, files: 0 };
+      return remoteDirTotals(sftp, remoteDir);
     });
   }
 

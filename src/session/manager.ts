@@ -1,5 +1,9 @@
 import { nullLogger, type Logger } from "../log.js";
-import { relayTransfer as relayTransferImpl, type RelayOutcome } from "./relay.js";
+import {
+  relayTransfer as relayTransferImpl,
+  type RelayHooks,
+  type RelayOutcome,
+} from "./relay.js";
 import type { SessionConn, SessionOptions, SessionStat } from "./session.js";
 import { Session } from "./session.js";
 import { GRAVE_TTL_MS, truncateTraces, type CommandTrace } from "./trace.js";
@@ -80,8 +84,9 @@ export class SessionManager {
     dstSids: string[],
     dstPath: string,
     timeoutMs = 0,
+    hooks: RelayHooks = {},
   ): Promise<RelayOutcome> {
-    return relayTransferImpl(this, srcSid, srcPath, dstSids, dstPath, timeoutMs);
+    return relayTransferImpl(this, srcSid, srcPath, dstSids, dstPath, timeoutMs, hooks);
   }
 
   private bury(session: Session): void {

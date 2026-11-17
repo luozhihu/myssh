@@ -130,6 +130,16 @@ function failedDownload(err: unknown): TransferOutcome {
   };
 }
 
+export interface RelayHooks {
+  onDownloadedBytes?: (bytes: number) => void;
+  onDestinationDone?: (
+    dstSid: string,
+    ok: boolean,
+    bytes: number,
+    error?: string,
+  ) => void;
+}
+
 export async function relayTransfer(
   manager: SessionManager,
   srcSid: string,
@@ -137,6 +147,7 @@ export async function relayTransfer(
   dstSids: string[],
   dstPath: string,
   timeoutMs = 0,
+  hooks: RelayHooks = {},
 ): Promise<RelayOutcome> {
   const srcSession = manager.get(srcSid);
   if (dstSids.length === 0) throw new Error("no relay destinations");
@@ -239,7 +250,7 @@ export async function relayTransfer(
   // A busy/closed source rejects before any bytes flow; treat it like a
   // failed download so the destinations are released instead of hanging.
   const downloadPromise = srcSession
-    .download(srcPath, sink, timeoutMs)
+    .download(srcPath, sink, timeoutMs, hooks.onDownloadedBytes)
     .catch(failedDownload);
   const uploadPromises = live.map(async (entry, streamIndex) => {
     const stream = streams[streamIndex]!;
@@ -255,6 +266,13 @@ export async function relayTransfer(
       destination.error = message(err);
     } finally {
       try { stream.destroy(); } catch { /* ignore */ }
+      const destination = destinations[entry.index]!;
+      hooks.onDestinationDone?.(
+        destination.dstSid,
+        destination.ok,
+        destination.bytes,
+        destination.error,
+      );
     }
   });
 

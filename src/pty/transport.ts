@@ -3,5 +3,7 @@ export interface PtyTransport {
   write(data: Buffer | string): void;
   onData(handler: (data: Buffer) => void): () => void;
   onClose(handler: (err?: Error) => void): () => void;
+  /** Resize the remote PTY (SSH window-change). Optional for test doubles. */
+  setWindow?(rows: number, cols: number): void;
   close(): void;
 }

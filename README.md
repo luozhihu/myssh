@@ -21,7 +21,8 @@ M4 (sftp file transfer) is complete:
 - [x] Persistent per-session sftp, single-file `upload` / `download`
 - [x] Recursive `upload_dir` / `download_dir` with conflict policy
 - [x] 1:N streaming `relay_transfer` without local disk
-- [ ] `install` / `doctor` / Agent injection (M5)
+- [x] `install` / `doctor` / Agent injection (M5)
+- [x] Standalone `ssh` and `file` CLI commands
 - [ ] npm publish and three-platform CI (M6)
 
 Connection forms:
@@ -83,6 +84,50 @@ Partial failures (timeouts, per-file errors, failed relay destinations) return
 `ok: false` in the result body without setting the MCP error flag. Hard errors
 (unknown sid, unavailable sftp) set the MCP error flag.
 
+## CLI
+
+```bash
+npx -y myssh@latest install     # first-time setup (scaffold + Agent injection)
+npx -y myssh@latest doctor      # verify files, permissions, node/npx, Agent configs
+npx -y myssh@latest ssh prod-web-01
+npx -y myssh@latest ssh prod-web-01 "uptime"
+npx -y myssh@latest file upload ./report.pdf /tmp/report.pdf --server prod-web-01
+npx -y myssh@latest file download /tmp/report.pdf ./report.pdf --server prod-web-01
+npx -y myssh@latest file upload-dir ./dist /srv/app --server prod-web-01
+npx -y myssh@latest file download-dir /var/log/app ./logs --server prod-web-01
+npx -y myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
+```
+
+`install` creates `~/.sshmng/` (or `$SSHMNG_HOME`), writes `config.json` and
+`config.example.json`, and injects a `myssh` MCP entry (via
+`npx -y myssh@latest mcp`) into the Agents you select. It supports:
+
+- **Claude Code** — `~/.claude.json`, key `mcpServers`
+- **CodeAgent** — `~/.cac.json`, key `mcpServers` (same shape as Claude Code)
+- **Hermes Agent** — `~/.hermes/config.yaml` (`%LOCALAPPDATA%\hermes\config.yaml`
+  on Windows), key `mcp_servers`
+- **OpenCode** — `~/.config/opencode/opencode.json`, key `mcp`
+
+Existing Agent configs are merged, not replaced; every change keeps a
+`<file>.bak.<YYYYMMDD-HHMMSS>` backup and writes the result atomically with
+`0600` permissions. `--agents` selects injectors explicitly, `--agents none`
+skips them, and `--pin` freezes the npm version currently running instead of
+`@latest`.
+
+`myssh ssh <name>` resolves a server first and falls back to a jumphost (the
+bastion menu included). With a command argument it runs non-interactively;
+Pattern B bastions and raw devices reject non-interactive commands because
+they have no Unix shell landing.
+
+`myssh file` mirrors the MCP transfer tools: `upload`, `download`,
+`upload-dir`, `download-dir`, and `relay` (1:N fanout without local disk).
+Pattern B (bastion) sessions have no sftp to the target, so use direct or
+`ssh_j=true`.
+
+`myssh update` is intentionally a no-op: Agent configs use `npx -y
+myssh@latest`, so new releases are picked up automatically. `myssh version
+--check` compares the current version with the npm registry.
+
 ## Configuration compatibility
 
 - Reads `~/.sshmng/config.json` by default.
@@ -98,7 +143,7 @@ Partial failures (timeouts, per-file errors, failed relay destinations) return
 npm install
 npm run typecheck
 npm test
-npm run build
+npm run test:e2e    # build + CLI smoke checks against dist/
 ```
 
 Design spec: `docs/superpowers/specs/2026-11-17-myssh-ts-rewrite-design.md`.
@@ -106,3 +151,4 @@ M1 plan: `docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md`.
 M2 plan: `docs/superpowers/plans/2026-11-17-myssh-m2-connection.md`.
 M3 plan: `docs/superpowers/plans/2026-11-18-myssh-m3-jumphosts.md`.
 M4 plan: `docs/superpowers/plans/2026-11-18-myssh-m4-sftp.md`.
+M5 plan: `docs/superpowers/plans/2026-11-18-myssh-m5-cli.md`.

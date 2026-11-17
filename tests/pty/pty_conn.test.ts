@@ -108,3 +108,24 @@ describe("PtyConn raw mode", () => {
     await expect(conn.sendRaw(Buffer.from("x"))).rejects.toThrow("connection closed");
   });
 });
+
+describe("relay primitives", () => {
+  it("drains queued and pushed-back data exactly once", async () => {
+    const transport = new FakePtyTransport();
+    const conn = new PtyConn(transport, "ab12");
+    transport.emit("queued");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(conn.drainPending().toString()).toBe("queued");
+    expect(conn.drainPending().length).toBe(0);
+    conn.close();
+  });
+
+  it("forwards window sizes to the transport", () => {
+    const transport = new FakePtyTransport();
+    const conn = new PtyConn(transport, "ab12");
+    conn.resize(40, 120);
+    conn.resize(0, 120);
+    expect(transport.windowSizes).toEqual([{ rows: 40, cols: 120 }]);
+    conn.close();
+  });
+});

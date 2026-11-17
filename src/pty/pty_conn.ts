@@ -387,6 +387,33 @@ export class PtyConn implements LoginFlowPty {
     return Date.now() - this.lastOutputAt;
   }
 
+  /** Observe raw incoming bytes without consuming the command queue. */
+  onData(handler: (data: Buffer) => void): () => void {
+    return this.transport.onData(handler);
+  }
+
+  /** Observe close (multi-subscriber, unlike the internal lifecycle hook). */
+  onClose(handler: (err?: Error) => void): () => void {
+    return this.transport.onClose(handler);
+  }
+
+  /** Bytes buffered during setup/LoginFlow, handed to the interactive relay. */
+  drainPending(): Buffer {
+    const parts: Buffer[] = [];
+    if (this.pushback.length > 0) {
+      parts.push(this.pushback);
+      this.pushback = Buffer.alloc(0);
+    }
+    if (this.queue.size > 0) parts.push(this.queue.drain());
+    return parts.length > 0 ? Buffer.concat(parts) : Buffer.alloc(0);
+  }
+
+  /** SSH window-change; ignores non-positive sizes (terminal not measurable). */
+  resize(rows: number, cols: number): void {
+    if (rows <= 0 || cols <= 0) return;
+    this.transport.setWindow?.(rows, cols);
+  }
+
   close(): void {
     if (this.closedFlag) return;
     this.closedFlag = true;

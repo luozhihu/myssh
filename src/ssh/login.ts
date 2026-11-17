@@ -51,6 +51,14 @@ class SshChannelTransport implements PtyTransport {
     return () => this.closeHandlers.delete(handler);
   }
 
+  setWindow(rows: number, cols: number): void {
+    try {
+      this.channel.setWindow(rows, cols, 0, 0);
+    } catch {
+      /* channel already gone */
+    }
+  }
+
   close(): void {
     this.fireClose();
     try { this.channel.end(); } catch { /* ignore */ }
@@ -117,6 +125,14 @@ export interface SetupResult {
 /** 兼容 M2 命名。 */
 export type DirectSetupResult = SetupResult;
 
+/** What the caller needs from the login; MCP sessions need both. */
+export interface SetupBehavior {
+  needShell: boolean;
+  needSftp: boolean;
+}
+
+const MCP_BEHAVIOR: SetupBehavior = { needShell: true, needSftp: true };
+
 interface SetupOptions {
   sid: string;
   knownHosts: KnownHostsStore;
@@ -145,14 +161,16 @@ async function runFlow(
 /** 所有 LoginFlow 之后的公共尾部：raw 标记或 DetectShell + RC 注入。 */
 async function finishLogin(
   conn: PtyConn,
-  server: SSHServer,
+  target: { raw?: boolean },
   trace: LoginTraceEntry[],
   stage: string,
+  behavior: SetupBehavior,
 ): Promise<void> {
-  if (server.raw) {
+  if (target.raw) {
     conn.markRaw();
     return;
   }
+  if (!behavior.needShell) return;
   await conn.detectShell();
   try {
     trace.push(await conn.injectRC());
@@ -171,6 +189,7 @@ async function finishLogin(
 /** 直连：dial → open pty → LoginFlow（可选）→ raw 或 detect+RC → 持久 sftp。 */
 export async function setupDirect(
   options: SetupOptions & { server: SSHServer; proxy?: Proxy },
+  behavior: SetupBehavior = MCP_BEHAVIOR,
 ): Promise<SetupResult> {
   const logger = options.logger ?? nullLogger;
   const server = options.server;
@@ -203,12 +222,15 @@ export async function setupDirect(
       conn, server.login_flow, server.login_entry,
       server.max_steps, server.global_timeout_ms, "direct",
     ));
-    await finishLogin(conn, server, loginTrace, "direct");
+    await finishLogin(conn, server, loginTrace, "direct", behavior);
   } catch (err) {
     conn.close();
     throw err;
   }
 
+  if (!behavior.needSftp) {
+    return { conn, loginTrace, sftpAvailable: false, sftp: null };
+  }
   const sftp = await openSftp(client, logger);
   return { conn, loginTrace, sftpAvailable: sftp !== null, sftp };
 }
@@ -223,6 +245,7 @@ export async function setupPatternA(
     jump: Jumphost;
     jumpProxy?: Proxy;
   },
+  behavior: SetupBehavior = MCP_BEHAVIOR,
 ): Promise<SetupResult> {
   const logger = options.logger ?? nullLogger;
   const server = options.server;
@@ -274,12 +297,15 @@ export async function setupPatternA(
       conn, server.login_flow, server.login_entry,
       server.max_steps, server.global_timeout_ms, "patternA",
     ));
-    await finishLogin(conn, server, loginTrace, "patternA");
+    await finishLogin(conn, server, loginTrace, "patternA", behavior);
   } catch (err) {
     conn.close();
     throw err;
   }
 
+  if (!behavior.needSftp) {
+    return { conn, loginTrace, sftpAvailable: false, sftp: null };
+  }
   // Pattern A 的 SFTP 通道经 direct-tcpip 落在 target 上。
   const sftp = await openSftp(targetClient, logger);
   return { conn, loginTrace, sftpAvailable: sftp !== null, sftp };
@@ -295,6 +321,7 @@ export async function setupPatternB(
     jump: Jumphost;
     jumpProxy?: Proxy;
   },
+  behavior: SetupBehavior = MCP_BEHAVIOR,
 ): Promise<SetupResult> {
   const logger = options.logger ?? nullLogger;
   const server = options.server;
@@ -333,7 +360,7 @@ export async function setupPatternB(
       conn, server.login_flow, server.login_entry,
       server.max_steps, server.global_timeout_ms, "target",
     ));
-    await finishLogin(conn, server, loginTrace, "patternB");
+    await finishLogin(conn, server, loginTrace, "patternB", behavior);
   } catch (err) {
     conn.close();
     throw err;
@@ -350,13 +377,94 @@ export async function setupServer(
     jump?: Jumphost;
     serverProxy?: Proxy;
     jumpProxy?: Proxy;
+    behavior?: SetupBehavior;
   },
 ): Promise<SetupResult> {
+  const behavior = options.behavior ?? MCP_BEHAVIOR;
   if (!options.jump) {
-    return setupDirect(options);
+    return setupDirect(options, behavior);
   }
   if (options.jump.ssh_j) {
-    return setupPatternA({ ...options, jump: options.jump });
+    return setupPatternA({ ...options, jump: options.jump }, behavior);
   }
-  return setupPatternB({ ...options, jump: options.jump });
+  return setupPatternB({ ...options, jump: options.jump }, behavior);
+}
+
+/** `myssh ssh` / `myssh file` login: direct, Pattern A, or Pattern B. */
+export async function setupCliServer(options: {
+  sid: string;
+  knownHosts: KnownHostsStore;
+  server: SSHServer;
+  jump?: Jumphost;
+  serverProxy?: Proxy;
+  jumpProxy?: Proxy;
+  needShell: boolean;
+  needSftp: boolean;
+  logger?: Logger;
+}): Promise<SetupResult> {
+  return setupServer({
+    sid: options.sid,
+    knownHosts: options.knownHosts,
+    logger: options.logger,
+    server: options.server,
+    jump: options.jump,
+    serverProxy: options.serverProxy,
+    jumpProxy: options.jumpProxy,
+    behavior: { needShell: options.needShell, needSftp: options.needSftp },
+  });
+}
+
+/** Direct jumphost login (`myssh ssh <jumphost>`). */
+export async function setupCliJumphost(options: {
+  sid: string;
+  knownHosts: KnownHostsStore;
+  jump: Jumphost;
+  proxy?: Proxy;
+  needShell: boolean;
+  logger?: Logger;
+}): Promise<SetupResult> {
+  const logger = options.logger ?? nullLogger;
+  const jump = options.jump;
+  const dialer = new Dialer(options.knownHosts, logger);
+
+  let client: Client;
+  try {
+    client = await dialer.dial({
+      addr: jump.addr,
+      user: jump.user,
+      auth: jump.auth,
+      proxy: options.proxy,
+      serverName: jump.name,
+      hostKeyVerify: jump.host_key_verify !== false,
+    });
+  } catch (err) {
+    throw new Error(`ssh connect to jumphost ${jump.addr}: ${message(err)}`);
+  }
+
+  let conn: PtyConn;
+  try {
+    conn = await openPty(client, options.sid, logger);
+  } catch (err) {
+    try { client.end(); } catch { /* ignore */ }
+    throw new Error(`setup pty: ${message(err)}`);
+  }
+
+  const loginTrace: LoginTraceEntry[] = [];
+  try {
+    loginTrace.push(...await runFlow(
+      conn, jump.login_flow, jump.login_entry,
+      jump.max_steps, jump.global_timeout_ms, "jumphost",
+    ));
+    await finishLogin(
+      conn,
+      { raw: false },
+      loginTrace,
+      "jumphost",
+      { needShell: options.needShell, needSftp: false },
+    );
+  } catch (err) {
+    conn.close();
+    throw err;
+  }
+  return { conn, loginTrace, sftpAvailable: false, sftp: null };
 }

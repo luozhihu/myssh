@@ -8,30 +8,10 @@ import {
 } from "../config/crud.js";
 import { Store, resolveConfigPath } from "../config/store.js";
 import type { Config, Jumphost, Proxy, SSHAuth, SSHServer } from "../config/types.js";
-import type { IO } from "./main.js";
+import type { IO } from "./io.js";
+import { takeConfigFlag } from "./flags.js";
 
 type EntityType = "server" | "jumphost" | "proxy";
-
-function takeConfigFlag(args: string[]): { config?: string; rest: string[] } {
-  const rest: string[] = [];
-  let config: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]!;
-    if (arg === "--config") {
-      const value = args[i + 1];
-      if (!value) {
-        throw new Error("--config requires a path");
-      }
-      config = value;
-      i += 1;
-    } else if (arg.startsWith("--config=")) {
-      config = arg.slice("--config=".length);
-    } else {
-      rest.push(arg);
-    }
-  }
-  return { config, rest };
-}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
