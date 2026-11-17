@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import type net from "node:net";
 import ssh2 from "ssh2";
-import type { Client as SshClient, ConnectConfig } from "ssh2";
+import type { Client as SshClient, ClientChannel, ConnectConfig } from "ssh2";
 import type { Proxy, SSHAuth } from "../config/types.js";
 import { nullLogger, type Logger } from "../log.js";
 import { KnownHostsStore } from "./known_hosts.js";
@@ -93,14 +93,25 @@ export class Dialer {
     } catch (err) {
       throw new Error(`dial ${opts.addr}: ${message(err)}`);
     }
+    return this.connectOverSocket(socket, opts, auth);
+  }
 
+  /**
+   * 在已有 socket / direct-tcpip channel 上完成 SSH 握手。
+   * hostVerifier 记录 TOFU 错误；握手失败时优先抛出该错误。
+   */
+  private async connectOverSocket(
+    socket: net.Socket | ClientChannel,
+    opts: DialOptions,
+    auth: AuthConfig,
+  ): Promise<SshClient> {
     let hostKeyError: Error | undefined;
     const { host, port } = splitHostPort(opts.addr);
     const config: ConnectConfig = {
       host,
       port,
       username: opts.user,
-      sock: socket,
+      sock: socket as unknown as net.Socket,
       readyTimeout: 10_000,
       hostVerifier: (key: Buffer): boolean => {
         if (!opts.hostKeyVerify) {
@@ -168,5 +179,59 @@ export class Dialer {
       addr: opts.addr,
     });
     return client;
+  }
+
+  /** 经 jumphost 打开 direct-tcpip；10s 硬超时兜底。 */
+  private openDirectTcpip(
+    jumpClient: SshClient,
+    host: string,
+    port: number,
+  ): Promise<ClientChannel> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("open direct-tcpip timed out after 10s"));
+      }, 10_000);
+      try {
+        jumpClient.forwardOut("127.0.0.1", 0, host, port, (err, channel) => {
+          if (settled) {
+            if (!err && channel) channel.destroy();
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          if (err) reject(new Error(message(err)));
+          else resolve(channel);
+        });
+      } catch (err) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    });
+  }
+
+  /** 经 jumphost 的 direct-tcpip 通道拨号 target（ssh -J 语义）。 */
+  async dialThrough(jumpClient: SshClient, opts: DialOptions): Promise<SshClient> {
+    this.logger.debug("dialing through", {
+      server: opts.serverName,
+      addr: opts.addr,
+      user: opts.user,
+      auth_method: opts.auth.private_key ? "private_key" : "password",
+      via_jumphost: true,
+    });
+    const auth = loadAuth(opts.auth);
+    const { host, port } = splitHostPort(opts.addr);
+    let channel: ClientChannel;
+    try {
+      channel = await this.openDirectTcpip(jumpClient, host, port);
+    } catch (err) {
+      throw new Error(`dial ${opts.addr} through jumphost: ${message(err)}`);
+    }
+    return this.connectOverSocket(channel, opts, auth);
   }
 }

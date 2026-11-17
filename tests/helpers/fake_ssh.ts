@@ -11,6 +11,7 @@ export interface FakeSshOptions {
   raw?: boolean;
   allowSftp?: boolean;
   allowPublicKey?: boolean;
+  forwarding?: boolean;
 }
 
 export class FakeShell {
@@ -168,6 +169,33 @@ export class FakeSshServer {
         session.on("sftp", (acceptSftp, rejectSftp) => {
           if (opts.allowSftp) acceptSftp();
           else rejectSftp();
+        });
+      });
+      client.on("tcpip", (accept, reject, info) => {
+        if (opts.forwarding === false) {
+          reject();
+          return;
+        }
+        const upstream = net.connect(info.destPort, info.destIP, () => {
+          let channel;
+          try {
+            channel = accept();
+          } catch {
+            upstream.destroy();
+            return;
+          }
+          channel.pipe(upstream).pipe(channel);
+          channel.on("error", () => upstream.destroy());
+          channel.on("close", () => upstream.destroy());
+          upstream.on("error", () => channel.destroy());
+          upstream.on("close", () => channel.destroy());
+        });
+        upstream.on("error", () => {
+          try {
+            reject();
+          } catch {
+            /* already settled */
+          }
         });
       });
     });
