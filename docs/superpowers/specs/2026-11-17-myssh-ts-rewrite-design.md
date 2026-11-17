@@ -73,7 +73,7 @@ myssh/
 │   │   ├── entity_cmd.ts   # server/jumphost/proxy list|get
 │   │   ├── ssh_cmd.ts      # 交互式 / 非交互式登录
 │   │   ├── file_cmd.ts     # file upload|download|upload-dir|download-dir|relay
-│   │   └── agents/         # claude-code.ts / hermes.ts / opencode.ts
+│   │   └── agents/         # claude-code.ts / codeagent.ts / hermes.ts / opencode.ts
 │   ├── config/
 │   │   ├── types.ts        # 与 config.json 字段一一对应
 │   │   ├── store.ts        # Load/Save（原子写）/ SSHMNG_HOME
@@ -338,12 +338,15 @@ dial（TOFU 主机密钥校验）→ 开 shell channel（PTY）→ LoginFlow（�
 | Agent | 文件 | 顶层 key | 条目形态 |
 |---|---|---|---|
 | Claude Code | `~/.claude.json` | `mcpServers` | `{command: "npx", args: ["-y", "myssh@latest", "mcp"]}` |
+| CodeAgent | `~/.cac.json`（Windows：`%USERPROFILE%\.cac.json`，即 `C:\Users\<user>\.cac.json`） | `mcpServers` | 与 Claude Code 完全相同的 JSON 结构；条目键为 `sshmng` |
 | Hermes | `~/.hermes/config.yaml`（Windows：`%LOCALAPPDATA%\\hermes\\config.yaml`） | `mcp_servers` | 同结构（YAML） |
 | OpenCode | `~/.config/opencode/opencode.json` | `mcp` | `command` 数组，env 字段名 `environment` |
 
 - 注入前创建带时间戳的备份。
 - 已存在且内容一致 → 跳过；内容不同 → 以本工具条目为准并保留备份（与 Go 版策略一致）。
 - `install` 自动探测已安装 Agent；`--agents none` 跳过所有注入。
+- 探测规则：Claude Code / CodeAgent 以配置文件存在为准（`~/.claude.json` / `~/.cac.json`）；Hermes / OpenCode 沿用原项目探测逻辑。四者均可用 `--agents <name>` 强制注入（`claude-code` / `codeagent` / `hermes` / `opencode`）。
+- CodeAgent 路径用 `os.homedir()` 拼接，不硬编码用户名；Windows 下自然得到 `C:\Users\<user>\.cac.json`。
 - `doctor` 复用探测/校验逻辑，报告路径、条目、Node/npx 状态。
 
 ### 12.3 npx 使用方式
@@ -396,7 +399,7 @@ npx -y myssh file upload prod-web-01 ./a.txt /tmp/a.txt
 - `pty`：ANSI/CRLF/退格归一化、sentinel 解析、shell 检测、RC 生成、raw read 静默吸收与 pushback。
 - `session`：状态机、并发串行化、idle 超时（fake timers）、graveyard TTL、trace 截断。
 - `sftp_dir`：冲突策略、并发、失败聚合；`relay`：1:N 扇出与部分失败。
-- `cli`：参数解析、帮助文本、Agent 注入（JSON/YAML 三种）、doctor 三态退出码。
+- `cli`：参数解析、帮助文本、Agent 注入（JSON/YAML 四种）、doctor 三态退出码。
 
 ### 15.2 集成测试
 
@@ -459,5 +462,5 @@ GitHub Actions 矩阵：
 3. 直连、Pattern A、Pattern B、raw 设备、sftp 单文件/目录/relay 均有集成测试且通过。
 4. macOS / Linux / Windows × Node 22/24 CI 全绿。
 5. `npx -y myssh@latest mcp` 可在三大平台启动并被 MCP client 调用。
-6. `npx -y myssh install` 能正确注入 Claude Code / Hermes / OpenCode，`doctor` 验证通过。
+6. `npx -y myssh install` 能正确注入 Claude Code / CodeAgent / Hermes / OpenCode，`doctor` 验证通过。
 7. stdout 无任何非 JSON-RPC 输出。
