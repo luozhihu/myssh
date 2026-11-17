@@ -51,6 +51,14 @@ class SshChannelTransport implements PtyTransport {
     return () => this.closeHandlers.delete(handler);
   }
 
+  setWindow(rows: number, cols: number): void {
+    try {
+      this.channel.setWindow(rows, cols, 0, 0);
+    } catch {
+      /* channel already gone */
+    }
+  }
+
   close(): void {
     this.fireClose();
     try { this.channel.end(); } catch { /* ignore */ }

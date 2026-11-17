@@ -3,6 +3,7 @@ import { FakeShell } from "./fake_ssh.js";
 
 export class FakePtyTransport implements PtyTransport {
   readonly written: Buffer[] = [];
+  readonly windowSizes: Array<{ rows: number; cols: number }> = [];
   autoRespond: boolean;
   private readonly dataHandlers = new Set<(data: Buffer) => void>();
   private readonly closeHandlers = new Set<(err?: Error) => void>();
@@ -32,6 +33,10 @@ export class FakePtyTransport implements PtyTransport {
   onClose(handler: (err?: Error) => void): () => void {
     this.closeHandlers.add(handler);
     return () => this.closeHandlers.delete(handler);
+  }
+
+  setWindow(rows: number, cols: number): void {
+    this.windowSizes.push({ rows, cols });
   }
 
   close(): void {
