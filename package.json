@@ -18,7 +18,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && node scripts/e2e-cli.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
