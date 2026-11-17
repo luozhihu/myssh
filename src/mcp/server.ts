@@ -118,7 +118,7 @@ export function createMcpServer(svc: Service): McpServer {
   }, (args) => updateProxyTool(svc, args));
 
   server.registerTool("login", {
-    description: "Establish an interactive SSH session to a server. Use list_ssh_servers first to resolve the name. Returns {sid, server_name, sftp_available, mode, tags}. mode: 'shell' = unix shell (use run_in_session); 'raw' = no unix shell, e.g. network switch (run_in_session is rejected; use send_in_session/read_in_session). tags mirror the server's configured tags. M2 supports direct connections only; via/login_flow return an explicit M3 error.",
+    description: "Establish an interactive SSH session to a server. Use list_ssh_servers first to resolve the name. Returns {sid, server_name, sftp_available, mode, tags}. mode: 'shell' = unix shell (use run_in_session); 'raw' = no unix shell, e.g. network switch (run_in_session is rejected; use send_in_session/read_in_session). tags mirror the server's configured tags. Supports direct connections, Pattern A (via.ssh_j=true, transparent ssh -J), and Pattern B (via.ssh_j=false, interactive bastion driven by LoginFlow). LoginFlow failures return JSON {error, login_trace} for diagnosis.",
     inputSchema: {
       name: z.string().describe(
         "SSH server name; supports name/addr/tag substring match (use list_ssh_servers to find)",
