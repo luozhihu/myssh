@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && node scripts/e2e-cli.mjs"
+    "test:e2e": "npm run build && node scripts/e2e-cli.mjs",
+    "align:output": "node scripts/align-output.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/ssh2": "^1.15.6",
+    "@vitest/coverage-v8": "^5.1.0",
     "tsup": "^9.0.0",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
