@@ -9,17 +9,36 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ssh",
+    "sftp",
+    "mcp",
+    "model-context-protocol",
+    "npx",
+    "claude-code"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && node scripts/e2e-cli.mjs"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "npm run build && node scripts/e2e-cli.mjs",
+    "align:output": "node scripts/align-output.mjs",
+    "check:package": "node scripts/check-package.mjs",
+    "release:check": "npm run typecheck && npm test && npm run test:e2e && npm run check:package",
+    "prepublishOnly": "npm run release:check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -30,8 +49,10 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/ssh2": "^1.15.6",
+    "@vitest/coverage-v8": "^5.1.0",
     "tsup": "^9.0.0",
     "typescript": "^7.0.2",
+    "vite": "^7.3.8",
     "vitest": "^5.1.0"
   }
 }
