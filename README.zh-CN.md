@@ -100,6 +100,23 @@ npx -y @lzh-dev/myssh@latest file download-dir /var/log/app ./logs --server prod
 npx -y @lzh-dev/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 ```
 
+### 不发布 npm 的本地安装
+
+无需 npm 账号。生成 tarball 后全局安装，并让 Agent 配置指向本地命令：
+
+```bash
+npm pack                                    # 自动构建 dist/，生成 lzh-dev-myssh-0.1.0.tgz
+npm i -g ./lzh-dev-myssh-0.1.0.tgz
+myssh version
+myssh install --local                       # 注入 {"command":"myssh","args":["mcp"]}
+```
+
+`--local` 不再经过 npx，要求 Agent 的 PATH 中有 `myssh`。不全局安装也可以直接运行 tarball：
+
+```bash
+npx -y --package /绝对路径/lzh-dev-myssh-0.1.0.tgz myssh version
+```
+
 `install` 创建 `~/.sshmng/`（或 `$SSHMNG_HOME`），写入 `config.json` 与
 `config.example.json`，并向所选 Agent 注入 `myssh` MCP 条目
 （`npx -y @lzh-dev/myssh@latest mcp`）。支持的 Agent：

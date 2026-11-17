@@ -42,7 +42,9 @@ Subcommands:
             ("command": "npx", "args": ["-y", "${PACKAGE_NAME}@latest", "mcp"]).
   install   Create ~/.sshmng/, generate config templates, and inject myssh
             into your AI Agent(s) (Claude Code / CodeAgent / Hermes Agent /
-            OpenCode). --pin freezes the npm version used by Agent configs.
+            OpenCode). --pin freezes the npm version used by Agent configs;
+            --local injects the globally installed myssh command instead
+            (for tarball installs without publishing to npm).
   doctor    Verify setup is correct: files, permissions, node/npx, Agent
             config entries.
   update    myssh runs through npx, so it updates automatically. This command

@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import type { AgentContext } from "../../src/cli/agent/types.js";
-import { buildEntry, expectedEntries } from "../../src/cli/agent/entry.js";
+import { buildEntry, buildLocalEntry, expectedEntries } from "../../src/cli/agent/entry.js";
 import { createInjectors } from "../../src/cli/agent/registry.js";
 import { tempDir } from "../helpers/config.js";
 
@@ -25,8 +25,20 @@ describe("buildEntry", () => {
       env: { SSHMNG_HOME: "/h" },
     });
     expect(buildEntry("/h", true, "1.2.3").args).toEqual(["-y", "@lzh-dev/myssh@1.2.3", "mcp"]);
-    expect(expectedEntries("/h", "1.2.3").map((e) => e.args[1]))
-      .toEqual(["@lzh-dev/myssh@latest", "@lzh-dev/myssh@1.2.3"]);
+    expect(expectedEntries("/h", "1.2.3").map((e) => `${e.command} ${e.args.join(" ")}`))
+      .toEqual([
+        "npx -y @lzh-dev/myssh@latest mcp",
+        "npx -y @lzh-dev/myssh@1.2.3 mcp",
+        "myssh mcp",
+      ]);
+  });
+
+  it("uses the global command with no npx indirection in local mode", () => {
+    expect(buildLocalEntry("/h")).toEqual({
+      command: "myssh",
+      args: ["mcp"],
+      env: { SSHMNG_HOME: "/h" },
+    });
   });
 });
 

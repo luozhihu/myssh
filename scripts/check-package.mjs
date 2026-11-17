@@ -27,7 +27,9 @@ check(
 );
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const raw = execFileSync(npm, ["pack", "--dry-run", "--json"], {
+// --ignore-scripts keeps prepack's build output out of the JSON stream; the
+// release gate builds dist/ before this check runs.
+const raw = execFileSync(npm, ["pack", "--dry-run", "--json", "--ignore-scripts"], {
   encoding: "utf8",
 });
 const packed = JSON.parse(raw)[0];
