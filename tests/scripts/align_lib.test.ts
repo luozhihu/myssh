@@ -8,9 +8,9 @@ function cli(stdout = "", code: number | null = 0, stderr = "") {
 describe("normalizeOutput", () => {
   it("rewrites brand tokens without touching paths or package specs", () => {
     const input =
-      "Run 'myssh help'; edit ~/.sshmng/config.json; try @lxx/myssh@latest";
+      "Run 'myssh help'; edit ~/.sshmng/config.json; try @lzh-dev/myssh@latest";
     expect(normalizeOutput(input)).toBe(
-      "Run 'sshmng help'; edit ~/.sshmng/config.json; try @lxx/sshmng@latest",
+      "Run 'sshmng help'; edit ~/.sshmng/config.json; try @lzh-dev/sshmng@latest",
     );
   });
 });

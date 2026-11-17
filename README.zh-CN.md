@@ -47,10 +47,10 @@ M4 起每个会话保持一条 sftp 通道：直连与 Pattern A 会话报告
 发布后：
 
 ```bash
-npx -y @lxx/myssh@latest mcp            # 启动 MCP 服务器（stdio）
-npx -y @lxx/myssh server list
-npx -y @lxx/myssh server get prod-web-01
-npx -y @lxx/myssh version
+npx -y @lzh-dev/myssh@latest mcp            # 启动 MCP 服务器（stdio）
+npx -y @lzh-dev/myssh server list
+npx -y @lzh-dev/myssh server get prod-web-01
+npx -y @lzh-dev/myssh version
 ```
 
 本地源码运行：
@@ -89,20 +89,20 @@ relay_transfer(src_sid, "/srv/app.tar", [dst_sid_1, dst_sid_2], "/srv/app.tar") 
 ## 命令行
 
 ```bash
-npx -y @lxx/myssh@latest install     # 首次安装（生成配置 + 注入 Agent）
-npx -y @lxx/myssh@latest doctor      # 检查文件、权限、node/npx、Agent 配置
-npx -y @lxx/myssh@latest ssh prod-web-01
-npx -y @lxx/myssh@latest ssh prod-web-01 "uptime"
-npx -y @lxx/myssh@latest file upload ./report.pdf /tmp/report.pdf --server prod-web-01
-npx -y @lxx/myssh@latest file download /tmp/report.pdf ./report.pdf --server prod-web-01
-npx -y @lxx/myssh@latest file upload-dir ./dist /srv/app --server prod-web-01
-npx -y @lxx/myssh@latest file download-dir /var/log/app ./logs --server prod-web-01
-npx -y @lxx/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
+npx -y @lzh-dev/myssh@latest install     # 首次安装（生成配置 + 注入 Agent）
+npx -y @lzh-dev/myssh@latest doctor      # 检查文件、权限、node/npx、Agent 配置
+npx -y @lzh-dev/myssh@latest ssh prod-web-01
+npx -y @lzh-dev/myssh@latest ssh prod-web-01 "uptime"
+npx -y @lzh-dev/myssh@latest file upload ./report.pdf /tmp/report.pdf --server prod-web-01
+npx -y @lzh-dev/myssh@latest file download /tmp/report.pdf ./report.pdf --server prod-web-01
+npx -y @lzh-dev/myssh@latest file upload-dir ./dist /srv/app --server prod-web-01
+npx -y @lzh-dev/myssh@latest file download-dir /var/log/app ./logs --server prod-web-01
+npx -y @lzh-dev/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 ```
 
 `install` 创建 `~/.sshmng/`（或 `$SSHMNG_HOME`），写入 `config.json` 与
 `config.example.json`，并向所选 Agent 注入 `myssh` MCP 条目
-（`npx -y @lxx/myssh@latest mcp`）。支持的 Agent：
+（`npx -y @lzh-dev/myssh@latest mcp`）。支持的 Agent：
 
 - **Claude Code** —— `~/.claude.json`，键 `mcpServers`
 - **CodeAgent** —— `~/.cac.json`，键 `mcpServers`（结构与 Claude Code 相同）
@@ -123,7 +123,7 @@ npx -y @lxx/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 `download-dir`、`relay`（1:N 扇出，本地不落地）。Pattern B（堡垒机）没有
 到目标的 sftp，请使用直连或 `ssh_j=true`。
 
-`myssh update` 有意设计为空操作：Agent 配置使用 `npx -y @lxx/myssh@latest`，
+`myssh update` 有意设计为空操作：Agent 配置使用 `npx -y @lzh-dev/myssh@latest`，
 新版本会自动生效。`myssh version --check` 会把当前版本与 npm registry 比较。
 
 ## 配置兼容性

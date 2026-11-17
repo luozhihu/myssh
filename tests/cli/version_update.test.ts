@@ -52,7 +52,7 @@ describe("version --check", () => {
       return response("9.9.9");
     });
     expect(await main(["version", "--check"], c.io)).toBe(0);
-    expect(requested).toBe("https://registry.npmjs.org/@lxx%2Fmyssh/latest");
+    expect(requested).toBe("https://registry.npmjs.org/@lzh-dev%2Fmyssh/latest");
     expect(c.text()).toContain("Checking latest release ... latest is 9.9.9\n");
     expect(c.text()).toContain(`Update available: ${VERSION} -> 9.9.9\n`);
     expect(c.text()).toContain("Run 'myssh update' to apply.\n");
@@ -78,8 +78,8 @@ describe("update", () => {
     const text = c.text();
     expect(text.startsWith("myssh update - checking for updates\n\n")).toBe(true);
     expect(text).toContain(`Current version: ${VERSION}\n`);
-    expect(text).toContain("Agent configs use \"npx -y @lxx/myssh@latest\"");
-    expect(text).toContain("npx -y @lxx/myssh@latest version");
+    expect(text).toContain("Agent configs use \"npx -y @lzh-dev/myssh@latest\"");
+    expect(text).toContain("npx -y @lzh-dev/myssh@latest version");
   });
 
   it("rejects unknown flags with exit 2", async () => {
