@@ -1,7 +1,11 @@
+import { mkdtempSync, rmSync } from "node:fs";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import ssh2 from "ssh2";
 import type { Connection, Server as SshServer } from "ssh2";
+import { FakeSftp } from "./fake_sftp.js";
 
 const { Server, utils } = ssh2;
 
@@ -26,6 +30,8 @@ export interface FakeSshOptions {
   forwarding?: boolean;
   bastion?: boolean;
   banner?: string;
+  sftpDelayMs?: number;
+  failRename?: boolean;
 }
 
 export interface FakeShellOptions {
@@ -194,6 +200,8 @@ export class FakeSshServer {
     readonly hostKeyBase64: string,
     private readonly server: SshServer,
     private readonly clients: Connection[],
+    private readonly sftpRootDir: string | null,
+    private readonly fakes: FakeSftp[],
   ) {}
 
   static async start(opts: FakeSshOptions = {}): Promise<FakeSshServer> {
@@ -202,6 +210,10 @@ export class FakeSshServer {
     if (parsedHostKey instanceof Error) throw parsedHostKey;
     const hostKeyBase64 = parsedHostKey.getPublicSSH().toString("base64");
     const clients: Connection[] = [];
+    const sftpRootDir = opts.allowSftp
+      ? mkdtempSync(path.join(tmpdir(), "myssh-sftp-"))
+      : null;
+    const fakes: FakeSftp[] = [];
     const server = new Server({ hostKeys: [hostKey] }, (client) => {
       clients.push(client);
       client.on("error", () => { /* client aborted; tests assert on the caller side */ });
@@ -232,8 +244,16 @@ export class FakeSshServer {
           stream.on("close", () => shell.cancel());
         });
         session.on("sftp", (acceptSftp, rejectSftp) => {
-          if (opts.allowSftp) acceptSftp();
-          else rejectSftp();
+          if (!opts.allowSftp || !sftpRootDir) {
+            rejectSftp();
+            return;
+          }
+          const sftp = acceptSftp();
+          fakes.push(new FakeSftp(sftp, {
+            root: sftpRootDir,
+            delayMs: opts.sftpDelayMs,
+            failRename: opts.failRename,
+          }));
         });
       });
       client.on("tcpip", (accept, reject, info) => {
@@ -266,17 +286,31 @@ export class FakeSshServer {
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as AddressInfo).port;
-    return new FakeSshServer(port, hostKeyBase64, server, clients);
+    return new FakeSshServer(
+      port,
+      hostKeyBase64,
+      server,
+      clients,
+      sftpRootDir,
+      fakes,
+    );
   }
 
   get addr(): string {
     return `127.0.0.1:${this.port}`;
   }
 
+  get sftpRoot(): string {
+    if (!this.sftpRootDir) throw new Error("sftp is disabled for this fake server");
+    return this.sftpRootDir;
+  }
+
   async close(): Promise<void> {
+    for (const fake of this.fakes) fake.dispose();
     for (const client of this.clients) {
       try { client.end(); } catch { /* ignore */ }
     }
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
+    if (this.sftpRootDir) rmSync(this.sftpRootDir, { recursive: true, force: true });
   }
 }

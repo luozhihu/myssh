@@ -42,6 +42,7 @@ Session transfer state machine (all six operations): closed → `session closed`
 - The ssh2 **server** SFTP implementation sends a fixed version packet with **no extensions**. `SFTPWrapper.ext_openssh_fsync` and `ext_openssh_rename` throw **synchronously** when the peer did not advertise the extension. Every client extension call must be wrapped in `try/catch`; the fake server thus always exercises the `Remove` + `Rename` fallback, while real OpenSSH uses `posix-rename`.
 - `ReadStream` reads sequentially; `WriteStream._write` issues one WRITE at a time, `_writev` batches concurrent writes. We pump with explicit backpressure so abort/timeout is deterministic.
 - `WriteStream` forces `emitClose = false` and `autoDestroy = false`. With `autoClose: false` and a pre-opened `handle`, `_final` does not close the handle, so we can fsync and close explicitly. `destroy()` still closes the handle via `_destroy`.
+- **Node ≥23 quirk:** with `autoClose: true`, `WriteStream._final` calls `destroy()` before `cb()`, which suppresses the `finish` event entirely (verified on Node 23.11). All uploads and the fake-server test helper must open with `autoClose: false` and close the handle explicitly; do not await `finish` on a default `createWriteStream`.
 - Client `readdir(path)` internally opens the directory, loops `READDIR` until a `STATUS_CODE.EOF`, then closes it. A fake server must return entries on the first `READDIR` and EOF on the next.
 - Client status errors carry `.code` (`STATUS_CODE.NO_SUCH_FILE === 2`).
 
