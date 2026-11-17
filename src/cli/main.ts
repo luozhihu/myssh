@@ -4,6 +4,7 @@ import { Service } from "../mcp/service.js";
 import { runStdioServer } from "../mcp/server.js";
 import { BUILD_DATE, COMMIT, goArch, goOS, VERSION } from "../version.js";
 import { runEntityCmd } from "./entity_cmd.js";
+import { runFileCmd } from "./file_cmd.js";
 import { runSSHCmd } from "./ssh_cmd.js";
 import { defaultIO } from "./io.js";
 import type { IO } from "./io.js";
@@ -63,6 +64,8 @@ export async function main(args: string[], io: IO = defaultIO): Promise<number> 
       return runEntityCmd("proxy", args.slice(1), io);
     case "ssh":
       return runSSHCmd(args.slice(1), io);
+    case "file":
+      return runFileCmd(args.slice(1), io);
     default:
       io.out(`Unknown command ${JSON.stringify(args[0])}. Run 'myssh help' for usage.\n`);
       return 2;

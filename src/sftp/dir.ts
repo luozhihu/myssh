@@ -259,6 +259,43 @@ export async function uploadDir(
   return { result, error: joinErrors(errors) };
 }
 
+/** Sum regular files under a remote tree; symlinks/errors are skipped. */
+export async function remoteDirTotals(
+  backend: SftpTransfer,
+  remoteDir: string,
+): Promise<{ bytes: number; files: number }> {
+  let bytes = 0;
+  let files = 0;
+  async function visit(remotePath: string, known?: SftpStat): Promise<void> {
+    let st = known;
+    if (!st) {
+      try {
+        st = await backend.lstat(remotePath);
+      } catch {
+        return;
+      }
+    }
+    if (st.isSymbolicLink) return;
+    if (st.isDirectory) {
+      let entries;
+      try {
+        entries = await backend.readdir(remotePath);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === "." || entry.name === "..") continue;
+        await visit(path.posix.join(remotePath, entry.name), entry.stat);
+      }
+      return;
+    }
+    bytes += st.size;
+    files += 1;
+  }
+  await visit(remoteDir);
+  return { bytes, files };
+}
+
 /** Download a remote directory tree; symlinks are skipped and not counted. */
 export async function downloadDir(
   backend: SftpTransfer,
