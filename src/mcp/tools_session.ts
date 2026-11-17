@@ -49,6 +49,7 @@ export async function loginTool(
     svc.manager.newSession(sid, server.name, setup.conn, idleSeconds * 1000, {
       tags: server.tags ?? [],
       raw: !!server.raw,
+      sftp: setup.sftp,
       sftpAvailable: setup.sftpAvailable,
       loginFlowTrace: setup.loginTrace,
     });

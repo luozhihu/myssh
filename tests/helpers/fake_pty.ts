@@ -3,7 +3,6 @@ import { FakeShell } from "./fake_ssh.js";
 
 export class FakePtyTransport implements PtyTransport {
   readonly written: Buffer[] = [];
-  sftp = false;
   autoRespond: boolean;
   private readonly dataHandlers = new Set<(data: Buffer) => void>();
   private readonly closeHandlers = new Set<(err?: Error) => void>();
@@ -38,10 +37,6 @@ export class FakePtyTransport implements PtyTransport {
   close(): void {
     this.shell.cancel();
     for (const handler of this.closeHandlers) handler();
-  }
-
-  probeSftp(): Promise<boolean> {
-    return Promise.resolve(this.sftp);
   }
 
   allWritten(): string {

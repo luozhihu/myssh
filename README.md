@@ -6,7 +6,7 @@ targeting zero-install distribution via `npx` and drop-in compatibility with
 
 ## Status
 
-M3 (jumphosts and LoginFlow) is complete:
+M4 (sftp file transfer) is complete:
 
 - [x] Project scaffold, build, tests
 - [x] Config model, validation, atomic load/save
@@ -15,14 +15,16 @@ M3 (jumphosts and LoginFlow) is complete:
 - [x] Direct SSH via password or private key, HTTP/SOCKS5 proxies
 - [x] TOFU `known_hosts`, 0600 key checks
 - [x] PTY sessions, command sentinel, `run_in_session`
-- [x] Session state, traces, `stat` / `get_trace`, raw send/read, sftp probe
+- [x] Session state, traces, `stat` / `get_trace`, raw send/read
 - [x] Transparent jumphosts (Pattern A, `ssh -J` semantics)
 - [x] Interactive bastions (Pattern B) driven by `login_flow`
-- [ ] sftp file transfer (M4)
+- [x] Persistent per-session sftp, single-file `upload` / `download`
+- [x] Recursive `upload_dir` / `download_dir` with conflict policy
+- [x] 1:N streaming `relay_transfer` without local disk
 - [ ] `install` / `doctor` / Agent injection (M5)
 - [ ] npm publish and three-platform CI (M6)
 
-M3 connection forms:
+Connection forms:
 
 - Direct (`no via`): SSH to the target; optional target `login_flow` after auth.
 - Pattern A (`via.ssh_j=true`): SSH to the jumphost, `direct-tcpip` tunnel,
@@ -31,8 +33,9 @@ M3 connection forms:
   `login_flow` then target `login_flow` drive the menu; sftp reports `false`.
 - LoginFlow failures return `{"error": "... loginflow ...", "login_trace": [...]}`.
 
-M3 limitation: SFTP availability is probed at login but file transfer tools
-arrive in M4.
+M4 adds a persistent sftp channel per session: direct and Pattern A sessions
+report `sftp_available: true`; Pattern B sessions report `false` (the channel
+would land on the bastion). File transfers never close the session on failure.
 
 ## Usage
 
@@ -53,13 +56,32 @@ npm run build
 node dist/index.js mcp
 ```
 
-The MCP server is named `sshmng` and exposes 16 tools:
+The MCP server is named `sshmng` and exposes 21 tools:
 
 - Config: `list_ssh_servers`, `get_ssh_server`, `update_ssh_server`,
   `list_jumphosts`, `get_jumphost`, `update_jumphost`,
   `list_proxies`, `get_proxy`, `update_proxy`
 - Sessions: `login`, `run_in_session`, `close_session`, `stat`,
   `get_trace`, `send_in_session`, `read_in_session`
+- File transfer: `upload` (one local file to the remote host), `download`
+  (one remote file to local), `upload_dir` (recursive tree with conflict
+  policy and concurrency), `download_dir` (recursive pull), `relay_transfer`
+  (stream one remote file to N sessions; 1:1 is a single-element list)
+
+### File transfer
+
+```
+login(name) -> {sid, sftp_available: true}
+upload(sid, "/local/report.pdf", "/tmp/report.pdf") -> {ok, bytes, timed_out}
+download(sid, "/tmp/report.pdf", "./report.pdf") -> {ok, bytes, timed_out}
+upload_dir(sid, "./dist", "/srv/app", conflict="overwrite", concurrency=4)
+download_dir(sid, "/var/log/app", "./logs", conflict="skip")
+relay_transfer(src_sid, "/srv/app.tar", [dst_sid_1, dst_sid_2], "/srv/app.tar") -> 1:N fanout
+```
+
+Partial failures (timeouts, per-file errors, failed relay destinations) return
+`ok: false` in the result body without setting the MCP error flag. Hard errors
+(unknown sid, unavailable sftp) set the MCP error flag.
 
 ## Configuration compatibility
 
@@ -83,3 +105,4 @@ Design spec: `docs/superpowers/specs/2026-11-17-myssh-ts-rewrite-design.md`.
 M1 plan: `docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md`.
 M2 plan: `docs/superpowers/plans/2026-11-17-myssh-m2-connection.md`.
 M3 plan: `docs/superpowers/plans/2026-11-18-myssh-m3-jumphosts.md`.
+M4 plan: `docs/superpowers/plans/2026-11-18-myssh-m4-sftp.md`.

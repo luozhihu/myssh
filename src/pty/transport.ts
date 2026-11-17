@@ -4,5 +4,4 @@ export interface PtyTransport {
   onData(handler: (data: Buffer) => void): () => void;
   onClose(handler: (err?: Error) => void): () => void;
   close(): void;
-  probeSftp(): Promise<boolean>;
 }

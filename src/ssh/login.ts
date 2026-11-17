@@ -3,12 +3,12 @@ import type { Jumphost, LoginAction, Proxy, SSHServer } from "../config/types.js
 import { nullLogger, type Logger } from "../log.js";
 import { PtyConn } from "../pty/pty_conn.js";
 import type { PtyTransport } from "../pty/transport.js";
+import { openSftp, type SftpClient } from "../sftp/client.js";
 import { Dialer } from "./dialer.js";
 import type { KnownHostsStore } from "./known_hosts.js";
 import { LoginFlowError, type LoginTraceEntry } from "./types.js";
 
 const OPEN_PTY_TIMEOUT_MS = 15_000;
-const SFTP_PROBE_TIMEOUT_MS = 5_000;
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -18,7 +18,7 @@ function hasFlow(flow: Record<string, LoginAction> | undefined): boolean {
   return !!flow && Object.keys(flow).length > 0;
 }
 
-/** ssh2 channel → PtyTransport。负责数据/关闭事件与 sftp 可用性探测。 */
+/** ssh2 channel → PtyTransport。负责数据与关闭事件。 */
 class SshChannelTransport implements PtyTransport {
   private readonly dataHandlers = new Set<(data: Buffer) => void>();
   private readonly closeHandlers = new Set<(err?: Error) => void>();
@@ -27,7 +27,6 @@ class SshChannelTransport implements PtyTransport {
   constructor(
     private readonly client: Client,
     private readonly channel: ClientChannel,
-    private readonly logger: Logger,
     private readonly jumpClient?: Client,
   ) {
     channel.on("data", (data: Buffer) => {
@@ -50,35 +49,6 @@ class SshChannelTransport implements PtyTransport {
   onClose(handler: (err?: Error) => void): () => void {
     this.closeHandlers.add(handler);
     return () => this.closeHandlers.delete(handler);
-  }
-
-  probeSftp(): Promise<boolean> {
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (value: boolean): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      };
-      const timer = setTimeout(() => finish(false), SFTP_PROBE_TIMEOUT_MS);
-      try {
-        this.client.sftp((err, sftp) => {
-          if (err || !sftp) {
-            this.logger.debug("sftp channel unavailable", {
-              err: err ? err.message : "no client",
-            });
-            finish(false);
-            return;
-          }
-          try { sftp.end(); } catch { /* ignore */ }
-          finish(true);
-        });
-      } catch (err) {
-        this.logger.debug("sftp channel unavailable", { err: message(err) });
-        finish(false);
-      }
-    });
   }
 
   close(): void {
@@ -128,7 +98,7 @@ export async function openPty(
   try {
     const channel = await Promise.race([opened, timedOut]);
     return new PtyConn(
-      new SshChannelTransport(client, channel, logger, jumpClient),
+      new SshChannelTransport(client, channel, jumpClient),
       sid,
       { logger },
     );
@@ -141,6 +111,7 @@ export interface SetupResult {
   conn: PtyConn;
   loginTrace: LoginTraceEntry[];
   sftpAvailable: boolean;
+  sftp: SftpClient | null;
 }
 
 /** 兼容 M2 命名。 */
@@ -197,7 +168,7 @@ async function finishLogin(
   }
 }
 
-/** 直连：dial → open pty → LoginFlow（可选）→ raw 或 detect+RC → sftp 探测。 */
+/** 直连：dial → open pty → LoginFlow（可选）→ raw 或 detect+RC → 持久 sftp。 */
 export async function setupDirect(
   options: SetupOptions & { server: SSHServer; proxy?: Proxy },
 ): Promise<SetupResult> {
@@ -238,8 +209,8 @@ export async function setupDirect(
     throw err;
   }
 
-  const sftpAvailable = await conn.probeSftp();
-  return { conn, loginTrace, sftpAvailable };
+  const sftp = await openSftp(client, logger);
+  return { conn, loginTrace, sftpAvailable: sftp !== null, sftp };
 }
 
 /**
@@ -310,8 +281,8 @@ export async function setupPatternA(
   }
 
   // Pattern A 的 SFTP 通道经 direct-tcpip 落在 target 上。
-  const sftpAvailable = await conn.probeSftp();
-  return { conn, loginTrace, sftpAvailable };
+  const sftp = await openSftp(targetClient, logger);
+  return { conn, loginTrace, sftpAvailable: sftp !== null, sftp };
 }
 
 /**
@@ -368,8 +339,8 @@ export async function setupPatternB(
     throw err;
   }
 
-  // SSH client 是到 bastion 的：SFTP 探测成功也会误导（文件落到 bastion）。
-  return { conn, loginTrace, sftpAvailable: false };
+  // SSH client 是到 bastion 的：SFTP 成功也会误导（文件落到 bastion）。
+  return { conn, loginTrace, sftpAvailable: false, sftp: null };
 }
 
 /** 按 server.via 选择直连 / Pattern A / Pattern B。 */

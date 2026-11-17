@@ -1,7 +1,18 @@
+import type { Readable, Writable } from "node:stream";
 import { goTimestamp } from "../util/time.js";
 import { isConnLost, PtyUnusableError } from "../ssh/errors.js";
 import type { LoginTraceEntry, RawReadResult, RunOutcome } from "../ssh/types.js";
 import { nullLogger, type Logger } from "../log.js";
+import { downloadDir, uploadDir } from "../sftp/dir.js";
+import {
+  emptyDirResult,
+  SftpUnavailableError,
+  type DirTransferOptions,
+  type DirTransferOutcome,
+  type SftpStat,
+  type SftpTransfer,
+  type TransferOutcome,
+} from "../sftp/types.js";
 import { truncateTraces, type CommandTrace } from "./trace.js";
 
 export type SessionState = "idle" | "running" | "closed";
@@ -43,6 +54,7 @@ export interface SessionRawRead {
 export interface SessionOptions {
   idleTimeoutMs?: number;
   raw?: boolean;
+  sftp?: SftpTransfer | null;
   sftpAvailable?: boolean;
   tags?: string[];
   loginFlowTrace?: LoginTraceEntry[];
@@ -62,6 +74,7 @@ export class Session {
   private readonly idleTimeoutMs: number;
   private readonly rawFlag: boolean;
   private readonly sftpAvail: boolean;
+  private readonly sftpClient: SftpTransfer | null;
   private readonly tags: string[];
   private readonly loginFlow: LoginTraceEntry[];
   private readonly logger: Logger;
@@ -75,7 +88,8 @@ export class Session {
   ) {
     this.idleTimeoutMs = options.idleTimeoutMs ?? 0;
     this.rawFlag = options.raw ?? false;
-    this.sftpAvail = options.sftpAvailable ?? false;
+    this.sftpClient = options.sftp ?? null;
+    this.sftpAvail = options.sftpAvailable ?? this.sftpClient?.available ?? false;
     this.tags = [...(options.tags ?? [])];
     this.loginFlow = [...(options.loginFlowTrace ?? [])];
     this.logger = options.logger ?? nullLogger;
@@ -234,6 +248,83 @@ export class Session {
     }
   }
 
+  async sftpStat(remotePath: string): Promise<SftpStat> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) throw new SftpUnavailableError();
+      return sftp.stat(remotePath);
+    });
+  }
+
+  async upload(
+    src: Readable,
+    remotePath: string,
+    timeoutMs = 0,
+  ): Promise<TransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
+      }
+      return sftp.upload(src, remotePath, timeoutMs);
+    });
+  }
+
+  async download(
+    remotePath: string,
+    dst: Writable,
+    timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
+      }
+      return sftp.download(remotePath, dst, timeoutMs, onBytes);
+    });
+  }
+
+  async uploadDir(
+    localDir: string,
+    remoteDir: string,
+    options: DirTransferOptions = {},
+  ): Promise<DirTransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { result: emptyDirResult(), error: new SftpUnavailableError() };
+      }
+      return uploadDir(sftp, localDir, remoteDir, options);
+    });
+  }
+
+  async downloadDir(
+    remoteDir: string,
+    localDir: string,
+    options: DirTransferOptions = {},
+  ): Promise<DirTransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { result: emptyDirResult(), error: new SftpUnavailableError() };
+      }
+      return downloadDir(sftp, remoteDir, localDir, options);
+    });
+  }
+
+  private async withTransfer<T>(
+    fn: (sftp: SftpTransfer | null) => Promise<T>,
+  ): Promise<T> {
+    this.requireIdle();
+    this.state = "running";
+    this.stopIdleTimer();
+    try {
+      return await fn(this.sftpClient);
+    } finally {
+      this.lastActivity = this.now();
+      if (!this.isClosed()) {
+        this.state = "idle";
+        this.resetIdleTimer();
+      }
+    }
+  }
+
   stat(): SessionStat {
     const out: SessionStat = {
       sid: this.sid,
@@ -261,6 +352,14 @@ export class Session {
     if (this.state === "closed") return;
     this.state = "closed";
     this.stopIdleTimer();
+    try {
+      this.sftpClient?.close();
+    } catch (err) {
+      this.logger.warn("close session sftp", {
+        sid: this.sid,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
     try {
       this.conn.close();
     } catch (err) {
