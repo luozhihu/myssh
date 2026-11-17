@@ -57,7 +57,7 @@ tests/
 - Create: `src/index.ts`, `src/version.ts`, `src/cli/main.ts`
 - Test: `tests/cli/main.test.ts`
 
-- [ ] **Step 1: 写失败的 CLI 测试**
+- [x] **Step 1: 写失败的 CLI 测试**
 
 `tests/cli/main.test.ts`：
 
@@ -104,12 +104,12 @@ describe("cli skeleton", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/cli/main.test.ts`
 Expected: FAIL，`Cannot find module '../../src/cli/main.js'`（此时依赖与源码都还不存在）
 
-- [ ] **Step 3: 创建工程文件**
+- [x] **Step 3: 创建工程文件**
 
 `package.json`：
 
@@ -281,7 +281,7 @@ export async function main(args: string[], io: IO = defaultIO): Promise<number> 
 }
 ```
 
-- [ ] **Step 4: 安装依赖并跑测试**
+- [x] **Step 4: 安装依赖并跑测试**
 
 Run:
 ```bash
@@ -290,12 +290,12 @@ npm test -- tests/cli/main.test.ts
 ```
 Expected: PASS（3 tests）
 
-- [ ] **Step 5: 验证构建产物**
+- [x] **Step 5: 验证构建产物**
 
 Run: `npm run build`
 Expected: 成功生成 `dist/index.js`，文件第一行为 `#!/usr/bin/env node`
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add package.json package-lock.json tsconfig.json tsup.config.ts vitest.config.ts .gitignore src/index.ts src/version.ts src/cli/main.ts tests/cli/main.test.ts
@@ -310,7 +310,7 @@ git commit -m "feat: scaffold TypeScript CLI skeleton"
 - Create: `src/config/types.ts`, `src/config/log_level.ts`
 - Test: `tests/config/log_level.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `tests/config/log_level.test.ts`：
 
@@ -345,12 +345,12 @@ describe("parseLogLevel", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/config/log_level.test.ts`
 Expected: FAIL，`Cannot find module '../../src/config/log_level.js'`
 
-- [ ] **Step 3: 实现类型与日志级别**
+- [x] **Step 3: 实现类型与日志级别**
 
 `src/config/types.ts`：
 
@@ -466,12 +466,12 @@ export function parseLogLevel(value: string | undefined): LogLevel {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `npm test -- tests/config/log_level.test.ts`
 Expected: PASS（3 tests）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/config/types.ts src/config/log_level.ts tests/config/log_level.test.ts
@@ -486,7 +486,7 @@ git commit -m "feat(config): add data types and log level parsing"
 - Create: `src/config/validate.ts`
 - Test: `tests/config/validate.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `tests/config/validate.test.ts`：
 
@@ -615,12 +615,12 @@ describe("validateConfig", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/config/validate.test.ts`
 Expected: FAIL，`Cannot find module '../../src/config/validate.js'`
 
-- [ ] **Step 3: 实现引用解析与校验**
+- [x] **Step 3: 实现引用解析与校验**
 
 `src/config/validate.ts`：
 
@@ -774,12 +774,12 @@ function validateLoginFlow(flow: Record<string, LoginAction>, entry: string | un
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `npm test -- tests/config/validate.test.ts`
 Expected: PASS（9 tests）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/config/validate.ts tests/config/validate.test.ts
@@ -794,7 +794,7 @@ git commit -m "feat(config): add reference resolution and validation"
 - Create: `src/config/store.ts`
 - Test: `tests/config/store.test.ts`, `tests/helpers/config.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `tests/helpers/config.ts`：
 
@@ -929,12 +929,12 @@ describe("Store", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/config/store.test.ts`
 Expected: FAIL，`Cannot find module '../../src/config/store.js'`
 
-- [ ] **Step 3: 实现 Store**
+- [x] **Step 3: 实现 Store**
 
 `src/config/store.ts`：
 
@@ -1059,12 +1059,12 @@ export class Store {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `npm test -- tests/config/store.test.ts`
 Expected: PASS（5 passed，1 skipped on Windows）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/config/store.ts tests/config/store.test.ts tests/helpers/config.ts
@@ -1079,7 +1079,7 @@ git commit -m "feat(config): add store with atomic save and permission checks"
 - Create: `src/config/crud.ts`
 - Test: `tests/config/crud.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `tests/config/crud.test.ts`：
 
@@ -1215,12 +1215,12 @@ describe("update", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/config/crud.test.ts`
 Expected: FAIL，`Cannot find module '../../src/config/crud.js'`
 
-- [ ] **Step 3: 实现 CRUD**
+- [x] **Step 3: 实现 CRUD**
 
 `src/config/crud.ts`：
 
@@ -1393,12 +1393,12 @@ export function updateProxy(cfg: Config, name: string, patch: unknown): void {
 
 > 说明：`prefix` 参数仅为保持三个 update 函数签名对称；错误文案与原 Go 版保持一致（由 `revalidate` 生成）。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `npm test -- tests/config/crud.test.ts`
 Expected: PASS（12 tests）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/config/crud.ts tests/config/crud.test.ts
@@ -1413,7 +1413,7 @@ git commit -m "feat(config): add list/get/update with RFC 7396 merge patch"
 - Create: `src/mcp/result.ts`, `src/mcp/service.ts`
 - Test: 由 Task 7 的协议测试覆盖（本任务先提交小步实现）
 
-- [ ] **Step 1: 实现结果辅助**
+- [x] **Step 1: 实现结果辅助**
 
 `src/mcp/result.ts`：
 
@@ -1450,7 +1450,7 @@ export function redactAuth(value: unknown): unknown {
 }
 ```
 
-- [ ] **Step 2: 实现 Service**
+- [x] **Step 2: 实现 Service**
 
 `src/mcp/service.ts`：
 
@@ -1473,12 +1473,12 @@ export class Service {
 }
 ```
 
-- [ ] **Step 3: 类型检查**
+- [x] **Step 3: 类型检查**
 
 Run: `npm run typecheck`
 Expected: PASS（无输出）
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/mcp/result.ts src/mcp/service.ts
@@ -1493,7 +1493,7 @@ git commit -m "feat(mcp): add result helpers and serialized service queue"
 - Create: `src/mcp/tools_config.ts`, `src/mcp/server.ts`
 - Test: `tests/mcp/tools_config.test.ts`
 
-- [ ] **Step 1: 写失败的协议测试**
+- [x] **Step 1: 写失败的协议测试**
 
 `tests/mcp/tools_config.test.ts`：
 
@@ -1664,12 +1664,12 @@ describe("config MCP tools", () => {
 
 > `sample` 中 `prod-web-01` 通过 `ssh_j=true` 的 bastion 走 Pattern A，合法。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/mcp/tools_config.test.ts`
 Expected: FAIL，`Cannot find module '../../src/mcp/server.js'`
 
-- [ ] **Step 3: 实现 9 个工具 handler**
+- [x] **Step 3: 实现 9 个工具 handler**
 
 `src/mcp/tools_config.ts`：
 
@@ -1817,7 +1817,7 @@ export function updateProxyTool(svc: Service, args: UpdateArgs): Promise<CallToo
 }
 ```
 
-- [ ] **Step 4: 实现 MCP server 注册**
+- [x] **Step 4: 实现 MCP server 注册**
 
 `src/mcp/server.ts`：
 
@@ -1925,14 +1925,14 @@ export async function runStdioServer(svc: Service): Promise<void> {
 }
 ```
 
-- [ ] **Step 5: 运行测试确认通过**
+- [x] **Step 5: 运行测试确认通过**
 
 Run: `npm test -- tests/mcp/tools_config.test.ts`
 Expected: PASS（6 tests）
 
 如果 `z.any()` 触发 schema 生成警告，改用 `z.unknown()`；工具入参行为不变。
 
-- [ ] **Step 6: 类型检查并提交**
+- [x] **Step 6: 类型检查并提交**
 
 Run: `npm run typecheck`
 Expected: PASS
@@ -1951,7 +1951,7 @@ git commit -m "feat(mcp): register 9 config CRUD tools"
 - Create: `src/cli/entity_cmd.ts`
 - Test: `tests/cli/entity.test.ts`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `tests/cli/entity.test.ts`：
 
@@ -2055,12 +2055,12 @@ describe("entity CLI", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npm test -- tests/cli/entity.test.ts`
 Expected: FAIL，`Unknown command "server"`（main 尚未路由）
 
-- [ ] **Step 3: 实现实体命令**
+- [x] **Step 3: 实现实体命令**
 
 `src/cli/entity_cmd.ts`：
 
@@ -2280,7 +2280,7 @@ function printProxyDetail(p: Proxy, io: IO): void {
 }
 ```
 
-- [ ] **Step 4: 在 main 中接入 mcp 与实体路由**
+- [x] **Step 4: 在 main 中接入 mcp 与实体路由**
 
 将 `src/cli/main.ts` 更新为：
 
@@ -2376,12 +2376,12 @@ export async function main(args: string[], io: IO = defaultIO): Promise<number> 
 }
 ```
 
-- [ ] **Step 5: 运行全部测试**
+- [x] **Step 5: 运行全部测试**
 
 Run: `npm test`
 Expected: PASS（全部测试）
 
-- [ ] **Step 6: 构建并手动冒烟**
+- [x] **Step 6: 构建并手动冒烟**
 
 Run:
 ```bash
@@ -2393,7 +2393,7 @@ Expected:
 - 版本三行输出
 - 实体列表输出 `No servers found.`（文件不存在时使用默认空配置）
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add src/cli/main.ts src/cli/entity_cmd.ts tests/cli/entity.test.ts
@@ -2408,7 +2408,7 @@ git commit -m "feat(cli): add mcp and entity list/get commands"
 - Create: `README.md`
 - Modify: `docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md`（勾选完成项）
 
-- [ ] **Step 1: 跑完整验收**
+- [x] **Step 1: 跑完整验收**
 
 Run:
 ```bash
@@ -2418,7 +2418,7 @@ npm run build
 ```
 Expected: 全部通过。
 
-- [ ] **Step 2: 用真实 MCP 客户端协议冒烟**
+- [x] **Step 2: 用真实 MCP 客户端协议冒烟**
 
 Run:
 ```bash
@@ -2428,7 +2428,7 @@ printf '%s\n' \
 ```
 Expected: 输出包含 `"serverInfo":{"name":"sshmng"`，然后进程等待更多输入（Ctrl-C 结束）。
 
-- [ ] **Step 3: 写 README（M1 状态）**
+- [x] **Step 3: 写 README（M1 状态）**
 
 `README.md`：
 
@@ -2467,7 +2467,7 @@ npm run build
 ```
 ```
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-11-17-myssh-m1-foundation.md
