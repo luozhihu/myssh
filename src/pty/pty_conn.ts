@@ -387,10 +387,6 @@ export class PtyConn implements LoginFlowPty {
     return Date.now() - this.lastOutputAt;
   }
 
-  async probeSftp(): Promise<boolean> {
-    return this.transport.probeSftp();
-  }
-
   close(): void {
     if (this.closedFlag) return;
     this.closedFlag = true;

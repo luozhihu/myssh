@@ -24,9 +24,6 @@ class ManualTransport implements PtyTransport {
     this.closeHandlers.add(handler);
     return () => this.closeHandlers.delete(handler);
   }
-  probeSftp(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
   close(): void {
     for (const handler of this.closeHandlers) handler();
   }

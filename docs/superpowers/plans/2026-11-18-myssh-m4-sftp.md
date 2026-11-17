@@ -48,6 +48,7 @@ Session transfer state machine (all six operations): closed → `session closed`
 - When an SFTP channel closes with requests in flight, ssh2 invokes their callbacks with `No response from server`, which can surface as an uncaught stream `error` after our pump has detached. Transfer streams get a permanent no-op `error` listener for their entire lifetime.
 - Client `readdir(path)` internally opens the directory, loops `READDIR` until a `STATUS_CODE.EOF`, then closes it. A fake server must return entries on the first `READDIR` and EOF on the next.
 - Client status errors carry `.code` (`STATUS_CODE.NO_SUCH_FILE === 2`).
+- The fake shell's `export PS1='$(echo _$?)__<sid>___]# '` matcher only accepts a lowercase-hex sid. Fake-backed login tests must pass a hex sid (e.g. `ab12`), not `s1`, or RC injection times out.
 
 ---
 
