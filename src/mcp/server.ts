@@ -23,6 +23,7 @@ import {
   statTool,
 } from "./tools_session.js";
 import { readInSessionTool, sendInSessionTool } from "./tools_raw.js";
+import { downloadTool, uploadTool } from "./tools_file.js";
 
 const instructions = `SSH session manager: servers, jumphosts, proxies, sessions.
 
@@ -185,6 +186,30 @@ export function createMcpServer(svc: Service): McpServer {
       ),
     },
   }, (args) => readInSessionTool(svc, args));
+
+  server.registerTool("upload", {
+    description: "Upload a local file to the remote host via sftp. Requires sftp_available=true on the session (check stat first). Returns {bytes, timed_out}. Fails with 'sftp not available' if session's sftp channel wasn't established (server doesn't support sftp subsystem).",
+    inputSchema: {
+      sid: z.string(),
+      src: z.string().describe("local file path to upload (must exist)"),
+      dst: z.string().describe("remote file path to write (e.g. /tmp/remote.txt)"),
+      timeout_ms: z.number().int().optional().describe(
+        "optional, 0 = default 300000 (300s). Returns timed_out=true + partial bytes if exceeded",
+      ),
+    },
+  }, (args) => uploadTool(svc, args));
+
+  server.registerTool("download", {
+    description: "Download a remote file to local via sftp. Requires sftp_available=true on the session (check stat first). Returns {bytes, timed_out}. Fails with 'sftp not available' if session's sftp channel wasn't established.",
+    inputSchema: {
+      sid: z.string(),
+      src: z.string().describe("remote file path to read"),
+      dst: z.string().describe("local file path to write (overwritten if exists)"),
+      timeout_ms: z.number().int().optional().describe(
+        "optional, 0 = default 300000 (300s). Returns timed_out=true + partial bytes if exceeded",
+      ),
+    },
+  }, (args) => downloadTool(svc, args));
 
   return server;
 }
