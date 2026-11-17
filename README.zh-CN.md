@@ -102,20 +102,47 @@ npx -y @lzh-dev/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 
 ### 不发布 npm 的本地安装
 
-无需 npm 账号。生成 tarball 后全局安装，并让 Agent 配置指向本地命令：
+无需 npm 账号。仍然需要 Node >= 22，npm 会在安装时从 registry 拉取运行时依赖。
 
 ```bash
-npm pack                                    # 自动构建 dist/，生成 lzh-dev-myssh-0.1.0.tgz
+# 1. 构建并打包（prepack 会自动先执行 build）
+npm pack                                # -> lzh-dev-myssh-<version>.tgz
+
+# 2. 全局安装 tarball
 npm i -g ./lzh-dev-myssh-0.1.0.tgz
+
+# 3. 生成 ~/.sshmng 并注入 Agent 配置
+myssh install --local --yes
+
+# 4. 验证
 myssh version
-myssh install --local                       # 注入 {"command":"myssh","args":["mcp"]}
+myssh doctor
 ```
 
-`--local` 不再经过 npx，要求 Agent 的 PATH 中有 `myssh`。不全局安装也可以直接运行 tarball：
+不加 `--yes` 的交互流程会先让你确认检测到的 Agent：直接按 **回车** 接受当前列表
+（输入编号可以切换选中项），然后在 `Proceed? [y/N]:` 处输入 `y`。只注入一个 Agent：
+
+```bash
+myssh install --local --yes --agents claude-code
+```
+
+`--local` 注入的是全局安装的命令，而不是 npx 包名：
+
+```json
+{ "command": "myssh", "args": ["mcp"], "env": { "SSHMNG_HOME": "/Users/you/.sshmng" } }
+```
+
+因此完全不需要发布。要求 Agent 的 `PATH` 中有 `myssh`（可用 `which myssh` 确认）；
+`--pin` 不能与 `--local` 同时使用。安装完成后需要重启 Agent。
+
+不全局安装也可以直接运行 tarball：
 
 ```bash
 npx -y --package /绝对路径/lzh-dev-myssh-0.1.0.tgz myssh version
 ```
+
+分发时把 `.tgz` 文件发给对方，对方执行第 2–4 步即可。
+卸载：`npm uninstall -g @lzh-dev/myssh`。
 
 `install` 创建 `~/.sshmng/`（或 `$SSHMNG_HOME`），写入 `config.json` 与
 `config.example.json`，并向所选 Agent 注入 `myssh` MCP 条目

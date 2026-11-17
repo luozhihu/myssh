@@ -104,22 +104,50 @@ npx -y @lzh-dev/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 
 ### Local installation without publishing
 
-No npm account is required. Build a tarball, install it globally, and point
-Agent configs at the installed command:
+No npm account is required. Node >= 22 is still needed; npm fetches the
+runtime dependencies from the registry during installation.
 
 ```bash
-npm pack                                    # builds dist/ and writes lzh-dev-myssh-0.1.0.tgz
+# 1. Build and pack (prepack runs the build automatically)
+npm pack                                # -> lzh-dev-myssh-<version>.tgz
+
+# 2. Install the tarball globally
 npm i -g ./lzh-dev-myssh-0.1.0.tgz
+
+# 3. Scaffold ~/.sshmng and inject the Agent configs
+myssh install --local --yes
+
+# 4. Verify
 myssh version
-myssh install --local                       # injects {"command":"myssh","args":["mcp"]}
+myssh doctor
 ```
 
-`--local` skips npx and requires `myssh` on the Agent's PATH. To run the
-tarball without installing it globally:
+The interactive flow (without `--yes`) asks you to confirm the detected Agents
+first: press **Enter** to accept the list (type numbers to toggle entries),
+then answer `y` at `Proceed? [y/N]:`. To inject a single Agent:
+
+```bash
+myssh install --local --yes --agents claude-code
+```
+
+`--local` injects the globally installed command instead of an npx spec:
+
+```json
+{ "command": "myssh", "args": ["mcp"], "env": { "SSHMNG_HOME": "/Users/you/.sshmng" } }
+```
+
+so nothing has to be published. `myssh` must be on the Agent's `PATH`
+(check with `which myssh`); `--pin` cannot be combined with `--local`.
+Restart the Agent after installing.
+
+To run the tarball without a global install:
 
 ```bash
 npx -y --package /abs/path/lzh-dev-myssh-0.1.0.tgz myssh version
 ```
+
+To share this build, send the `.tgz` file; the recipient runs steps 2-4.
+Uninstall with `npm uninstall -g @lzh-dev/myssh`.
 
 `install` creates `~/.sshmng/` (or `$SSHMNG_HOME`), writes `config.json` and
 `config.example.json`, and injects a `myssh` MCP entry (via
