@@ -204,6 +204,7 @@ export class SftpClient implements SftpTransfer {
     src: Readable,
     remotePath: string,
     timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
   ): Promise<TransferOutcome> {
     if (!this.available) {
       return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
@@ -241,7 +242,7 @@ export class SftpClient implements SftpTransfer {
     let timedOut = false;
     let error: Error | undefined;
     try {
-      bytes = await pumpToWritable(src, ws, controller.signal);
+      bytes = await pumpToWritable(src, ws, controller.signal, onBytes);
       await finishWritable(ws, controller.signal);
     } catch (err) {
       timedOut = controller.signal.aborted;

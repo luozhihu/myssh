@@ -259,12 +259,13 @@ export class Session {
     src: Readable,
     remotePath: string,
     timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
   ): Promise<TransferOutcome> {
     return this.withTransfer(async (sftp) => {
       if (!this.sftpAvail || !sftp) {
         return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
       }
-      return sftp.upload(src, remotePath, timeoutMs);
+      return sftp.upload(src, remotePath, timeoutMs, onBytes);
     });
   }
 
@@ -279,6 +280,20 @@ export class Session {
         return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
       }
       return sftp.download(remotePath, dst, timeoutMs, onBytes);
+    });
+  }
+
+  async downloadToFile(
+    remotePath: string,
+    localPath: string,
+    timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome> {
+    return this.withTransfer(async (sftp) => {
+      if (!this.sftpAvail || !sftp) {
+        return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
+      }
+      return sftp.downloadToFile(remotePath, localPath, timeoutMs, onBytes);
     });
   }
 

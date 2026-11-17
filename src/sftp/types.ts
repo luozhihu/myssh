@@ -77,7 +77,12 @@ export interface SftpTransfer {
   lstat(remotePath: string): Promise<SftpStat>;
   readdir(remotePath: string): Promise<Array<{ name: string; stat: SftpStat }>>;
   mkdir(remotePath: string): Promise<void>;
-  upload(src: Readable, remotePath: string, timeoutMs?: number): Promise<TransferOutcome>;
+  upload(
+    src: Readable,
+    remotePath: string,
+    timeoutMs?: number,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome>;
   download(
     remotePath: string,
     dst: Writable,
