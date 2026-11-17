@@ -1,5 +1,5 @@
 {
-  "name": "myssh",
+  "name": "@lxx/myssh",
   "version": "0.1.0",
   "description": "Unified SSH session manager (MCP server + CLI), drop-in compatible with sshmng",
   "type": "module",

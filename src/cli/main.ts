@@ -1,3 +1,4 @@
+import { PACKAGE_NAME } from "../pkg.js";
 import { defaultIO } from "./io.js";
 import type { IO } from "./io.js";
 import { parseFlags } from "./flags.js";
@@ -38,7 +39,7 @@ Usage:
 
 Subcommands:
   mcp       Start the MCP server. This is what Agent configs use
-            ("command": "npx", "args": ["-y", "myssh@latest", "mcp"]).
+            ("command": "npx", "args": ["-y", "${PACKAGE_NAME}@latest", "mcp"]).
   install   Create ~/.sshmng/, generate config templates, and inject myssh
             into your AI Agent(s) (Claude Code / CodeAgent / Hermes Agent /
             OpenCode). --pin freezes the npm version used by Agent configs.
@@ -47,7 +48,7 @@ Subcommands:
   update    myssh runs through npx, so it updates automatically. This command
             prints how Agent configs pick up new releases.
   version   Print the current version, commit, and build date. With --check,
-            query the npm registry for the latest myssh release.
+            query the npm registry for the latest ${PACKAGE_NAME} release.
   server    List and view SSH server configurations.
   jumphost  List and view jumphost configurations.
   proxy     List and view proxy configurations.

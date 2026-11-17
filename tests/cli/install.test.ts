@@ -41,7 +41,7 @@ describe("install", () => {
       const claude = JSON.parse(await fs.readFile(path.join(user.dir, ".claude.json"), "utf8"));
       expect(claude.mcpServers.sshmng).toEqual({
         command: "npx",
-        args: ["-y", `myssh@${VERSION}`, "mcp"],
+        args: ["-y", `@lxx/myssh@${VERSION}`, "mcp"],
         env: { SSHMNG_HOME: home.dir },
       });
       expect(existsSync(path.join(user.dir, ".cac.json"))).toBe(true);

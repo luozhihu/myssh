@@ -1,9 +1,8 @@
+import { REGISTRY_LATEST_URL } from "../pkg.js";
 import { BUILD_DATE, COMMIT, goArch, goOS, VERSION } from "../version.js";
 import { parseFlags } from "./flags.js";
 import { platformOf, type IO } from "./io.js";
 import { isNewer } from "./semver.js";
-
-const REGISTRY_LATEST = "https://registry.npmjs.org/myssh/latest";
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -39,7 +38,7 @@ export async function runVersionCmd(
   const fetchImpl = io.fetchImpl ?? fetch;
   let latest: string;
   try {
-    const response = await fetchImpl(REGISTRY_LATEST);
+    const response = await fetchImpl(REGISTRY_LATEST_URL);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json() as { version?: unknown };
     if (typeof body.version !== "string" || body.version === "") {

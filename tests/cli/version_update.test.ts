@@ -46,8 +46,13 @@ describe("version --check", () => {
   });
 
   it("reports a newer npm release", async () => {
-    const c = capture(async () => response("9.9.9"));
+    let requested = "";
+    const c = capture(async (input) => {
+      requested = String(input);
+      return response("9.9.9");
+    });
     expect(await main(["version", "--check"], c.io)).toBe(0);
+    expect(requested).toBe("https://registry.npmjs.org/@lxx%2Fmyssh/latest");
     expect(c.text()).toContain("Checking latest release ... latest is 9.9.9\n");
     expect(c.text()).toContain(`Update available: ${VERSION} -> 9.9.9\n`);
     expect(c.text()).toContain("Run 'myssh update' to apply.\n");
@@ -73,8 +78,8 @@ describe("update", () => {
     const text = c.text();
     expect(text.startsWith("myssh update - checking for updates\n\n")).toBe(true);
     expect(text).toContain(`Current version: ${VERSION}\n`);
-    expect(text).toContain("Agent configs use \"npx -y myssh@latest\"");
-    expect(text).toContain("npx -y myssh@latest version");
+    expect(text).toContain("Agent configs use \"npx -y @lxx/myssh@latest\"");
+    expect(text).toContain("npx -y @lxx/myssh@latest version");
   });
 
   it("rejects unknown flags with exit 2", async () => {

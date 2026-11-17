@@ -47,10 +47,10 @@ would land on the bastion). File transfers never close the session on failure.
 Once published:
 
 ```bash
-npx -y myssh@latest mcp            # start MCP server (stdio)
-npx -y myssh server list
-npx -y myssh server get prod-web-01
-npx -y myssh version
+npx -y @lxx/myssh@latest mcp            # start MCP server (stdio)
+npx -y @lxx/myssh server list
+npx -y @lxx/myssh server get prod-web-01
+npx -y @lxx/myssh version
 ```
 
 From a local checkout:
@@ -91,20 +91,20 @@ Partial failures (timeouts, per-file errors, failed relay destinations) return
 ## CLI
 
 ```bash
-npx -y myssh@latest install     # first-time setup (scaffold + Agent injection)
-npx -y myssh@latest doctor      # verify files, permissions, node/npx, Agent configs
-npx -y myssh@latest ssh prod-web-01
-npx -y myssh@latest ssh prod-web-01 "uptime"
-npx -y myssh@latest file upload ./report.pdf /tmp/report.pdf --server prod-web-01
-npx -y myssh@latest file download /tmp/report.pdf ./report.pdf --server prod-web-01
-npx -y myssh@latest file upload-dir ./dist /srv/app --server prod-web-01
-npx -y myssh@latest file download-dir /var/log/app ./logs --server prod-web-01
-npx -y myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
+npx -y @lxx/myssh@latest install     # first-time setup (scaffold + Agent injection)
+npx -y @lxx/myssh@latest doctor      # verify files, permissions, node/npx, Agent configs
+npx -y @lxx/myssh@latest ssh prod-web-01
+npx -y @lxx/myssh@latest ssh prod-web-01 "uptime"
+npx -y @lxx/myssh@latest file upload ./report.pdf /tmp/report.pdf --server prod-web-01
+npx -y @lxx/myssh@latest file download /tmp/report.pdf ./report.pdf --server prod-web-01
+npx -y @lxx/myssh@latest file upload-dir ./dist /srv/app --server prod-web-01
+npx -y @lxx/myssh@latest file download-dir /var/log/app ./logs --server prod-web-01
+npx -y @lxx/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 ```
 
 `install` creates `~/.sshmng/` (or `$SSHMNG_HOME`), writes `config.json` and
 `config.example.json`, and injects a `myssh` MCP entry (via
-`npx -y myssh@latest mcp`) into the Agents you select. It supports:
+`npx -y @lxx/myssh@latest mcp`) into the Agents you select. It supports:
 
 - **Claude Code** — `~/.claude.json`, key `mcpServers`
 - **CodeAgent** — `~/.cac.json`, key `mcpServers` (same shape as Claude Code)
@@ -129,7 +129,7 @@ Pattern B (bastion) sessions have no sftp to the target, so use direct or
 `ssh_j=true`.
 
 `myssh update` is intentionally a no-op: Agent configs use `npx -y
-myssh@latest`, so new releases are picked up automatically. `myssh version
+@lxx/myssh@latest`, so new releases are picked up automatically. `myssh version
 --check` compares the current version with the npm registry.
 
 ## Configuration compatibility

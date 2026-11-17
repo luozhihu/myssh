@@ -1,3 +1,4 @@
+import { PACKAGE_NAME } from "../pkg.js";
 import { VERSION } from "../version.js";
 import { parseFlags } from "./flags.js";
 import type { IO } from "./io.js";
@@ -27,8 +28,8 @@ export async function runUpdateCmd(args: string[], io: IO): Promise<number> {
   io.out("myssh update - checking for updates\n\n");
   io.out(`Current version: ${VERSION}\n`);
   io.out("myssh is distributed via npm and runs with npx, so there is nothing to update in place.\n");
-  io.out("Agent configs use \"npx -y myssh@latest\" and pick up new releases automatically.\n");
-  io.out("To force the latest release now: npx -y myssh@latest version\n");
+  io.out(`Agent configs use "npx -y ${PACKAGE_NAME}@latest" and pick up new releases automatically.\n`);
+  io.out(`To force the latest release now: npx -y ${PACKAGE_NAME}@latest version\n`);
   io.out(
     "To pin a specific version, run 'myssh install --pin --agents <names>' or edit the Agent config.\n",
   );
