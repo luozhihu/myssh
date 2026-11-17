@@ -29,6 +29,7 @@ import {
   uploadDirTool,
   uploadTool,
 } from "./tools_file.js";
+import { relayTransferTool } from "./tools_relay.js";
 
 const instructions = `SSH session manager: servers, jumphosts, proxies, sessions.
 
@@ -240,6 +241,21 @@ export function createMcpServer(svc: Service): McpServer {
     description: "Download a remote directory tree to local via sftp. Walks the remote tree, creates local dirs (MkdirAll), transfers files concurrently (default 4). Conflict policy: overwrite (default) / skip / rename. Per-file errors don't abort the transfer; aggregated in result. Requires sftp_available=true on the session. Note: partial failures return ok:false in the result body with isError not set; check the ok field, not the MCP error flag.",
     inputSchema: dirTransferSchema,
   }, (args) => downloadDirTool(svc, args));
+
+  server.registerTool("relay_transfer", {
+    description: "Relay (stream) a remote file from one session to one or more other sessions through the myssh process, without landing it on local disk and without waiting for the full download before uploading. 1:N fanout: the source is read once and streamed concurrently to all destinations (sharded/replicated deploy). 1:1 is the single-element dst_sids case. Requires sftp_available=true on the source and every destination (check stat first). All destinations share the same dst_path. Returns {ok, downloaded_bytes, timed_out, src_server, destinations:[{dst_sid, dst_server, ok, bytes, timed_out, error}]}. Per-destination failures do not abort the others; partial failures return ok:false in the result body with IsError not set (check the ok field, not the MCP error flag).",
+    inputSchema: {
+      src_sid: z.string(),
+      src_path: z.string().describe("remote file path on the source session to relay"),
+      dst_sids: z.array(z.string()).describe(
+        "destination session sids; 1:1 = single-element array",
+      ),
+      dst_path: z.string().describe("remote write path shared by all destinations"),
+      timeout_ms: z.number().int().optional().describe(
+        "optional, 0 = default 300000 (300s). Each of download + every upload side gets its own budget (concurrent)",
+      ),
+    },
+  }, (args) => relayTransferTool(svc, args));
 
   return server;
 }

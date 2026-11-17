@@ -36,7 +36,7 @@ const sample = {
 };
 
 describe("config MCP tools", () => {
-  it("registers all 20 tools", async () => {
+  it("registers all 21 tools", async () => {
     const { dir, cleanup } = await tempDir();
     try {
       const file = await writeConfig(dir, sample);
@@ -46,8 +46,9 @@ describe("config MCP tools", () => {
         "close_session", "download", "download_dir", "get_jumphost",
         "get_proxy", "get_ssh_server", "get_trace", "list_jumphosts",
         "list_proxies", "list_ssh_servers", "login", "read_in_session",
-        "run_in_session", "send_in_session", "stat", "update_jumphost",
-        "update_proxy", "update_ssh_server", "upload", "upload_dir",
+        "relay_transfer", "run_in_session", "send_in_session", "stat",
+        "update_jumphost", "update_proxy", "update_ssh_server", "upload",
+        "upload_dir",
       ]);
     } finally {
       await cleanup();
