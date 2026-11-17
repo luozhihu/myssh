@@ -287,7 +287,10 @@ export class FakeSftp {
   }
 
   private status(reqId: number, code: number): void {
-    this.sftp.status(reqId, code);
+    // Delayed handlers can outlive a closed channel; nothing to answer then.
+    try {
+      this.sftp.status(reqId, code);
+    } catch { /* channel closed */ }
   }
 
   private fail(reqId: number, err: unknown): void {

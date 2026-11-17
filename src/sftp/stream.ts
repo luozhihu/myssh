@@ -1,8 +1,8 @@
-import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
 import type { PumpError } from "./types.js";
 
-function aborted(signal: AbortSignal): Error {
+/** The error a transfer should report once its abort signal fires. */
+export function abortError(signal: AbortSignal): Error {
   const reason = signal.reason;
   return reason instanceof Error ? reason : new Error("transfer aborted");
 }
@@ -22,7 +22,7 @@ export function waitDrain(dst: Writable, signal: AbortSignal): Promise<void> {
       cleanup();
       reject(dst.errored ?? new Error("destination closed"));
     };
-    const onAbort = (): void => { cleanup(); reject(aborted(signal)); };
+    const onAbort = (): void => { cleanup(); reject(abortError(signal)); };
     dst.once("drain", onDrain);
     dst.once("error", onError);
     dst.once("close", onClose);
@@ -47,14 +47,14 @@ export async function pumpToWritable(
   dst.on("error", onError);
   try {
     for await (const chunk of src) {
-      if (signal.aborted) throw aborted(signal);
+      if (signal.aborted) throw abortError(signal);
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
       if (!dst.write(buf)) await waitDrain(dst, signal);
       if (dst.errored) throw dst.errored;
       bytes += buf.length;
       onBytes?.(bytes);
     }
-    if (signal.aborted) throw aborted(signal);
+    if (signal.aborted) throw abortError(signal);
     if (dst.errored) throw dst.errored;
     return bytes;
   } catch (err) {
@@ -66,10 +66,35 @@ export async function pumpToWritable(
   }
 }
 
-/** End a writable and wait until all queued data is flushed. */
-export async function finishWritable(dst: Writable): Promise<void> {
-  if (dst.writableFinished) return;
-  const finished = once(dst, "finish");
-  dst.end();
-  await finished;
+/**
+ * End a writable and wait until all queued data is flushed. With a signal,
+ * an abort (or the stream being destroyed) rejects instead of hanging.
+ */
+export function finishWritable(dst: Writable, signal?: AbortSignal): Promise<void> {
+  if (dst.writableFinished) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      dst.off("finish", onFinish);
+      dst.off("error", onError);
+      dst.off("close", onClose);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onFinish = (): void => { cleanup(); resolve(); };
+    const onError = (err: Error): void => { cleanup(); reject(err); };
+    const onClose = (): void => {
+      cleanup();
+      reject(dst.errored ?? new Error("destination closed"));
+    };
+    const onAbort = (): void => { cleanup(); reject(abortError(signal!)); };
+    dst.once("finish", onFinish);
+    dst.once("error", onError);
+    dst.once("close", onClose);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      cleanup();
+      reject(abortError(signal));
+      return;
+    }
+    dst.end();
+  });
 }

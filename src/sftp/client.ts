@@ -10,6 +10,7 @@ import {
   errorMessage,
   type PumpError,
   type SftpStat,
+  type SftpTransfer,
   type TransferOutcome,
 } from "./types.js";
 
@@ -140,7 +141,7 @@ export function openSftp(
   });
 }
 
-export class SftpClient {
+export class SftpClient implements SftpTransfer {
   private closed = false;
 
   constructor(
@@ -241,7 +242,7 @@ export class SftpClient {
     let error: Error | undefined;
     try {
       bytes = await pumpToWritable(src, ws, controller.signal);
-      await finishWritable(ws);
+      await finishWritable(ws, controller.signal);
     } catch (err) {
       timedOut = controller.signal.aborted;
       const pump = err as PumpError;

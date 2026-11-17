@@ -1,3 +1,5 @@
+import type { Readable, Writable } from "node:stream";
+
 export const DEFAULT_TRANSFER_TIMEOUT_MS = 300_000;
 export const DEFAULT_CONCURRENCY = 4;
 export const SFTP_UNAVAILABLE = "sftp not available for this session";
@@ -61,6 +63,34 @@ export function emptyDirResult(): DirTransferResult {
 
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** SFTP status code 2 is SSH_FX_NO_SUCH_FILE. */
+export function isNoSuchFile(err: unknown): boolean {
+  return (err as { code?: number } | null)?.code === 2;
+}
+
+/** Structural interface shared by SftpClient and test doubles. */
+export interface SftpTransfer {
+  readonly available: boolean;
+  stat(remotePath: string): Promise<SftpStat>;
+  lstat(remotePath: string): Promise<SftpStat>;
+  readdir(remotePath: string): Promise<Array<{ name: string; stat: SftpStat }>>;
+  mkdir(remotePath: string): Promise<void>;
+  upload(src: Readable, remotePath: string, timeoutMs?: number): Promise<TransferOutcome>;
+  download(
+    remotePath: string,
+    dst: Writable,
+    timeoutMs?: number,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome>;
+  downloadToFile(
+    remotePath: string,
+    localPath: string,
+    timeoutMs?: number,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome>;
+  close(): void;
 }
 
 /** Go's errors.Join: newline-separated messages in one Error. */
