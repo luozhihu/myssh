@@ -10,8 +10,8 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function authIsEmpty(auth: SSHServer["auth"]): boolean {
-  return !auth.password && !auth.private_key && !auth.passphrase;
+function authIsEmpty(auth: SSHServer["auth"] | undefined): boolean {
+  return !auth || (!auth.password && !auth.private_key && !auth.passphrase);
 }
 
 export function resolveReferences(cfg: Config): void {
