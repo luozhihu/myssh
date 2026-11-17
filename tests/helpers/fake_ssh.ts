@@ -41,8 +41,9 @@ export class FakeShell {
         this.line = "";
         continue;
       }
-      if (byte === 0x0a) {
-        const line = this.line.replace(/\r$/, "");
+      // 真实 PTY 默认 ICRNL：Enter 发送的 \r 被终端驱动转为 \n。
+      if (byte === 0x0a || byte === 0x0d) {
+        const line = this.line;
         this.line = "";
         this.handleLine(line);
       } else {

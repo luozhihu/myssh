@@ -36,16 +36,17 @@ const sample = {
 };
 
 describe("config MCP tools", () => {
-  it("registers all 9 config tools", async () => {
+  it("registers all 16 tools", async () => {
     const { dir, cleanup } = await tempDir();
     try {
       const file = await writeConfig(dir, sample);
       const { client } = await connect(new Store(file));
       const tools = await client.listTools();
       expect(tools.tools.map((t) => t.name).sort()).toEqual([
-        "get_jumphost", "get_proxy", "get_ssh_server",
-        "list_jumphosts", "list_proxies", "list_ssh_servers",
-        "update_jumphost", "update_proxy", "update_ssh_server",
+        "close_session", "get_jumphost", "get_proxy", "get_ssh_server",
+        "get_trace", "list_jumphosts", "list_proxies", "list_ssh_servers",
+        "login", "read_in_session", "run_in_session", "send_in_session",
+        "stat", "update_jumphost", "update_proxy", "update_ssh_server",
       ]);
     } finally {
       await cleanup();
