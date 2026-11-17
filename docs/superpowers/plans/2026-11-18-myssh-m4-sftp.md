@@ -651,6 +651,8 @@ async function uploadFile(sftp: SftpClient, file: string, remote: string, timeou
 describe("SftpClient upload", () => {
   it("writes a file atomically and leaves no temp file behind", async () => {
     const { server, dir, sftp } = await setup();
+    // Single-file upload does not create parent directories (Go parity).
+    await sftp.mkdir("/upload");
     const file = await localFile(dir, "a.txt", "hello upload");
     const outcome = await uploadFile(sftp, file, "/upload/a.txt");
 
