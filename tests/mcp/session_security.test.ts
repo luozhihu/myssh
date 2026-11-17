@@ -169,25 +169,4 @@ describe("session security and transport options", () => {
     expect(login.json().sftp_available).toBe(true);
   });
 
-  it("rejects via and login_flow with explicit M3 errors", async () => {
-    const { fake, client, cleanup } = await startApp({
-      server: { via: "bastion" },
-      jumphosts: [{
-        name: "bastion", addr: "127.0.0.1:22", user: "ops",
-        auth: { password: "secret" }, ssh_j: true,
-      }],
-    });
-    cleanupFns.push(cleanup, () => fake.close());
-    const via = await call(client, "login", { name: "local" });
-    expect(via.isError).toBe(true);
-    expect(via.text).toBe("via jumphosts not implemented yet (M3)");
-
-    const flowApp = await startApp({
-      server: { login_flow: { expect: "Password:", send: "secret\\r" } },
-    });
-    cleanupFns.push(flowApp.cleanup, () => flowApp.fake.close());
-    const flow = await call(flowApp.client, "login", { name: "local" });
-    expect(flow.isError).toBe(true);
-    expect(flow.text).toBe("login_flow not implemented yet (M3)");
-  });
 });

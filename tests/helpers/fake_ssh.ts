@@ -12,7 +12,18 @@ export interface FakeSshOptions {
   allowSftp?: boolean;
   allowPublicKey?: boolean;
   forwarding?: boolean;
+  bastion?: boolean;
+  banner?: string;
 }
+
+export interface FakeShellOptions {
+  raw?: boolean;
+  bastion?: boolean;
+  banner?: string;
+}
+
+export const BASTION_MENU =
+  "Welcome to Jumphost v2\r\nMain menu:\r\n1) prod-db\r\nSelect target: ";
 
 export class FakeShell {
   private line = "";
@@ -20,11 +31,19 @@ export class FakeShell {
   private token = "";
   private commandActive = false;
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
+  private bastionPhase: "menu" | "user" | "pass" | "shell" | null = null;
 
   constructor(
     private readonly send: (text: string) => void,
     private readonly raw: boolean,
-  ) {}
+    options: FakeShellOptions = {},
+  ) {
+    if (options.banner) this.send(options.banner);
+    if (options.bastion) {
+      this.bastionPhase = "menu";
+      this.send(BASTION_MENU);
+    }
+  }
 
   /** 喂入终端字节。 */
   input(chunk: Buffer): void {
@@ -70,6 +89,10 @@ export class FakeShell {
   }
 
   private handleLine(line: string): void {
+    if (this.bastionPhase && this.bastionPhase !== "shell") {
+      this.handleBastionLine(line);
+      return;
+    }
     const detect = /^__sshmng_dr=([0-9a-f]+);/.exec(line);
     if (detect) {
       this.send(
@@ -94,6 +117,33 @@ export class FakeShell {
     // RC 注入的 export/set/stty 等按真实 shell 行为静默执行。
     if (/^(export|set|setopt|unset|stty|umask)\b/.test(line)) return;
     if (!this.commandActive) this.runCommand(line);
+  }
+
+  /** 交互式堡垒机菜单：选择目标 → target 登录 → 进入 target shell。 */
+  private handleBastionLine(line: string): void {
+    switch (this.bastionPhase) {
+      case "menu":
+        if (line === "1") {
+          this.send("Connecting to prod-db...\r\nlogin: ");
+          this.bastionPhase = "user";
+        }
+        return;
+      case "user":
+        this.send("Password: ");
+        this.bastionPhase = "pass";
+        return;
+      case "pass":
+        if (line === "wonderland") {
+          this.send("Welcome to prod-db!\r\n");
+          this.bastionPhase = "shell";
+        } else {
+          this.send("Login incorrect\r\nSelect target: ");
+          this.bastionPhase = "menu";
+        }
+        return;
+      default:
+        return;
+    }
   }
 
   private runCommand(line: string): void {
@@ -161,7 +211,10 @@ export class FakeSshServer {
         session.on("pty", (acceptPty) => acceptPty());
         session.on("shell", (acceptShell) => {
           const stream = acceptShell();
-          const shell = new FakeShell((text) => stream.write(text), !!opts.raw);
+          const shell = new FakeShell((text) => stream.write(text), !!opts.raw, {
+            bastion: opts.bastion,
+            banner: opts.banner,
+          });
           stream.on("data", (data: Buffer) => shell.input(data));
           stream.on("error", () => { /* client went away */ });
           stream.on("close", () => shell.cancel());
