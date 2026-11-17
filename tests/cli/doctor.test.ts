@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createInjectors } from "../../src/cli/agent/registry.js";
-import { buildEntry } from "../../src/cli/agent/entry.js";
+import { buildEntry, buildLocalEntry } from "../../src/cli/agent/entry.js";
 import { runDoctor } from "../../src/cli/doctor.js";
 import { scaffoldHome } from "../../src/cli/files.js";
 import { VERSION } from "../../src/version.js";
@@ -118,6 +118,24 @@ describe("doctor", () => {
       })).toBe(1);
       expect(h.text()).toContain(
         "[FAIL]  npx not found on PATH - install Node.js >= 22 (includes npx)",
+      );
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("accepts a local global-command entry", async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      await scaffoldHome(dir, {});
+      const ctx = { homeDir: dir, env: {}, platform: "darwin" as const };
+      const [claude] = createInjectors(ctx);
+      await claude!.inject(claude!.configPath(ctx), buildLocalEntry(dir));
+
+      const h = harness(dir);
+      expect(await runDoctor([], h.io, { home: dir, ...deps })).toBe(0);
+      expect(h.text()).toContain(
+        "[OK]  Claude Code config has sshmng entry, command/args/env match",
       );
     } finally {
       await cleanup();

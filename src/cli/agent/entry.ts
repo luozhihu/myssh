@@ -15,12 +15,25 @@ export function buildEntry(
   };
 }
 
-/** Doctor accepts either the rolling or the pinned entry. */
+/** Entry for a globally installed binary; `myssh install --local` uses this. */
+export function buildLocalEntry(home: string, command = "myssh"): MCPEntry {
+  return {
+    command,
+    args: ["mcp"],
+    env: { SSHMNG_HOME: home },
+  };
+}
+
+/** Doctor accepts the rolling/pinned npx entries and the local global command. */
 export function expectedEntries(
   home: string,
   version: string = VERSION,
 ): MCPEntry[] {
-  return [buildEntry(home, false, version), buildEntry(home, true, version)];
+  return [
+    buildEntry(home, false, version),
+    buildEntry(home, true, version),
+    buildLocalEntry(home),
+  ];
 }
 
 export function expectedHome(entry: MCPEntry): string {

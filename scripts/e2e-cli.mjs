@@ -54,6 +54,29 @@ try {
   check("doctor exit", doctor.code === 0, doctor.out + doctor.err);
   check("doctor summary", doctor.out.includes("Summary: "), doctor.out);
 
+  const localInstall = run([
+    "install", "--yes", "--local", "--agents", "claude-code", "--home", home,
+  ]);
+  check("local install exit", localInstall.code === 0, localInstall.out + localInstall.err);
+  check(
+    "local install complete",
+    localInstall.out.includes("Setup complete!"),
+    localInstall.out,
+  );
+  const claudeConfig = JSON.parse(readFileSync(path.join(userHome, ".claude.json"), "utf8"));
+  check(
+    "local entry command",
+    claudeConfig.mcpServers.sshmng.command === "myssh",
+    JSON.stringify(claudeConfig.mcpServers.sshmng),
+  );
+  check(
+    "local entry args",
+    JSON.stringify(claudeConfig.mcpServers.sshmng.args) === '["mcp"]',
+    JSON.stringify(claudeConfig.mcpServers.sshmng),
+  );
+  const localDoctor = run(["doctor"]);
+  check("doctor accepts local entry", localDoctor.code === 0, localDoctor.out + localDoctor.err);
+
   const list = run(["server", "list"]);
   check("server list exit", list.code === 0, list.err);
   check("server list empty", list.out === "No servers found.\n", list.out);

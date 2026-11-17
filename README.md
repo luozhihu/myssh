@@ -102,6 +102,25 @@ npx -y @lzh-dev/myssh@latest file download-dir /var/log/app ./logs --server prod
 npx -y @lzh-dev/myssh@latest file relay /srv/app.tar --server src --to dst1,dst2
 ```
 
+### Local installation without publishing
+
+No npm account is required. Build a tarball, install it globally, and point
+Agent configs at the installed command:
+
+```bash
+npm pack                                    # builds dist/ and writes lzh-dev-myssh-0.1.0.tgz
+npm i -g ./lzh-dev-myssh-0.1.0.tgz
+myssh version
+myssh install --local                       # injects {"command":"myssh","args":["mcp"]}
+```
+
+`--local` skips npx and requires `myssh` on the Agent's PATH. To run the
+tarball without installing it globally:
+
+```bash
+npx -y --package /abs/path/lzh-dev-myssh-0.1.0.tgz myssh version
+```
+
 `install` creates `~/.sshmng/` (or `$SSHMNG_HOME`), writes `config.json` and
 `config.example.json`, and injects a `myssh` MCP entry (via
 `npx -y @lzh-dev/myssh@latest mcp`) into the Agents you select. It supports:

@@ -2,7 +2,7 @@ import { readLineOf, envOf, homeOf, platformOf, type IO } from "./io.js";
 import { parseFlags } from "./flags.js";
 import { defaultHome, scaffoldHome } from "./files.js";
 import { promptConfirm } from "./prompt.js";
-import { buildEntry } from "./agent/entry.js";
+import { buildEntry, buildLocalEntry } from "./agent/entry.js";
 import { createInjectors } from "./agent/registry.js";
 import type { AgentContext, AgentInjector } from "./agent/types.js";
 import { runDoctor, type DoctorOptions } from "./doctor.js";
@@ -60,7 +60,7 @@ export async function runInstall(
     flags = parseFlags(args, {
       strings: ["home", "agents"],
       numbers: [],
-      booleans: ["yes", "pin", "skip-files", "skip-agents"],
+      booleans: ["yes", "pin", "local", "skip-files", "skip-agents"],
       arrays: [],
     });
   } catch (err) {
@@ -72,11 +72,17 @@ export async function runInstall(
     return 2;
   }
 
+  const pin = flags.booleans.has("pin");
+  const local = flags.booleans.has("local");
+  if (local && pin) {
+    io.out("Error: --pin is only valid with the default npm entry\n");
+    return 2;
+  }
+
   const version = options.version ?? VERSION;
   const env = envOf(io);
   const home = flags.strings.get("home") || defaultHome(env, homeOf(io));
   const yes = flags.booleans.has("yes");
-  const pin = flags.booleans.has("pin");
   const skipFiles = flags.booleans.has("skip-files");
   const agentsFlag = flags.strings.get("agents") ?? "";
   const skipAgents = flags.booleans.has("skip-agents") || agentsFlag === "none";
@@ -139,7 +145,7 @@ export async function runInstall(
     io.out(`  [ok] Wrote ${home}/config.example.json (0600)\n`);
   }
 
-  const entry = buildEntry(home, pin, version);
+  const entry = local ? buildLocalEntry(home) : buildEntry(home, pin, version);
   for (const injector of injectors) {
     const file = injector.configPath(ctx);
     try {

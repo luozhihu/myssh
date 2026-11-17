@@ -59,6 +59,48 @@ describe("install", () => {
     }
   });
 
+  it("injects the globally installed command with --local", async () => {
+    const home = await tempDir();
+    const user = await tempDir();
+    try {
+      const c = capture([], user.dir);
+      const code = await runInstall(
+        ["--yes", "--local", "--agents", "claude-code", "--home", home.dir],
+        c.io,
+        deps,
+      );
+      expect(code).toBe(0);
+      const claude = JSON.parse(await fs.readFile(path.join(user.dir, ".claude.json"), "utf8"));
+      expect(claude.mcpServers.sshmng).toEqual({
+        command: "myssh",
+        args: ["mcp"],
+        env: { SSHMNG_HOME: home.dir },
+      });
+      expect(c.text()).toContain("Setup complete!\n");
+    } finally {
+      await home.cleanup();
+      await user.cleanup();
+    }
+  });
+
+  it("rejects --pin combined with --local", async () => {
+    const home = await tempDir();
+    const user = await tempDir();
+    try {
+      const c = capture([], user.dir);
+      const code = await runInstall(
+        ["--yes", "--local", "--pin", "--agents", "none", "--home", home.dir],
+        c.io,
+        deps,
+      );
+      expect(code).toBe(2);
+      expect(c.text()).toContain("--pin is only valid with the default npm entry");
+    } finally {
+      await home.cleanup();
+      await user.cleanup();
+    }
+  });
+
   it("skips agents with --agents none", async () => {
     const home = await tempDir();
     const user = await tempDir();
