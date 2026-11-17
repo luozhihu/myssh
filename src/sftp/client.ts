@@ -1,7 +1,8 @@
-import type { Readable } from "node:stream";
+import { open, rename, unlink } from "node:fs/promises";
+import type { Readable, Writable } from "node:stream";
 import type { Client, FileEntryWithStats, SFTPWrapper } from "ssh2";
 import { nullLogger, type Logger } from "../log.js";
-import { atomicRemotePath } from "./paths.js";
+import { atomicRemotePath, localTempPath } from "./paths.js";
 import { finishWritable, pumpToWritable } from "./stream.js";
 import {
   DEFAULT_TRANSFER_TIMEOUT_MS,
@@ -226,6 +227,11 @@ export class SftpClient {
     }
 
     const ws = this.sftp.createWriteStream(tmpPath, { handle, autoClose: false });
+    // Keep a listener for the stream's whole lifetime: ssh2 delivers late
+    // "No response from server" errors to callbacks of requests that were
+    // still in flight when the channel closed.
+    const onStreamError = (): void => { /* surfaced by pump */ };
+    ws.on("error", onStreamError);
     const onAbort = (): void => {
       try { ws.destroy(); } catch { /* ignore */ }
     };
@@ -271,5 +277,121 @@ export class SftpClient {
     }
     this.logger.debug("sftp upload done", { remote: remotePath, bytes });
     return { bytes, timedOut: false };
+  }
+
+  async download(
+    remotePath: string,
+    dst: Writable,
+    timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome> {
+    if (!this.available) {
+      return { bytes: 0, timedOut: false, error: new SftpUnavailableError() };
+    }
+    const timeout = timeoutMs > 0 ? timeoutMs : DEFAULT_TRANSFER_TIMEOUT_MS;
+    // Pre-open the handle so "open remote" failures are visible before any
+    // bytes flow, exactly like Go's `sftpClient.Open`.
+    let handle: Buffer;
+    try {
+      handle = await openRemote(this.sftp, remotePath, "r");
+    } catch (err) {
+      return {
+        bytes: 0,
+        timedOut: false,
+        error: new Error(`open remote ${remotePath}: ${message(err)}`),
+      };
+    }
+    const src = this.sftp.createReadStream(remotePath, { handle, autoClose: true });
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error(
+      `transfer timed out after ${timeout}ms`,
+    )), timeout);
+    // Deliberately never removed: see the upload path for why.
+    const onError = (): void => { /* surfaced by pump */ };
+    src.on("error", onError);
+    const onAbort = (): void => {
+      try { src.destroy(); } catch { /* ignore */ }
+    };
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      const bytes = await pumpToWritable(src, dst, controller.signal, onBytes);
+      return { bytes, timedOut: false };
+    } catch (err) {
+      const pump = err as PumpError;
+      return {
+        bytes: typeof pump.bytes === "number" ? pump.bytes : 0,
+        timedOut: controller.signal.aborted,
+        error: err instanceof Error ? err : new Error(String(err)),
+      };
+    } finally {
+      clearTimeout(timer);
+      controller.signal.removeEventListener("abort", onAbort);
+      try { src.destroy(); } catch { /* ignore */ }
+    }
+  }
+
+  async downloadToFile(
+    remotePath: string,
+    localPath: string,
+    timeoutMs = 0,
+    onBytes?: (bytes: number) => void,
+  ): Promise<TransferOutcome> {
+    const tmpPath = localTempPath(localPath);
+    let fh: Awaited<ReturnType<typeof open>>;
+    try {
+      fh = await open(tmpPath, "wx");
+    } catch (err) {
+      return {
+        bytes: 0,
+        timedOut: false,
+        error: new Error(`create temp for ${localPath}: ${message(err)}`),
+      };
+    }
+    const ws = fh.createWriteStream({ autoClose: false });
+    let removed = false;
+    const cleanup = async (): Promise<void> => {
+      if (removed) return;
+      removed = true;
+      // Release the FileHandle's stream reference, or close() hangs forever.
+      try { ws.destroy(); } catch { /* ignore */ }
+      try { await fh.close(); } catch { /* ignore */ }
+      try { await unlink(tmpPath); } catch { /* ignore */ }
+    };
+    try {
+      const outcome = await this.download(remotePath, ws, timeoutMs, onBytes);
+      try {
+        await finishWritable(ws);
+      } catch (err) {
+        if (!outcome.error) {
+          outcome.error = err instanceof Error ? err : new Error(String(err));
+        }
+      }
+      try { ws.destroy(); } catch { /* ignore */ }
+      if (outcome.error || outcome.timedOut) {
+        await cleanup();
+        return outcome;
+      }
+      try { await fh.close(); } catch { /* ignore */ }
+      try {
+        await rename(tmpPath, localPath);
+      } catch (err) {
+        await cleanup();
+        return {
+          bytes: outcome.bytes,
+          timedOut: false,
+          error: new Error(`rename temp -> ${localPath}: ${message(err)}`),
+        };
+      }
+      removed = true;
+      return outcome;
+    } catch (err) {
+      await cleanup();
+      return {
+        bytes: 0,
+        timedOut: false,
+        error: err instanceof Error ? err : new Error(String(err)),
+      };
+    }
   }
 }

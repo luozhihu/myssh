@@ -108,3 +108,53 @@ describe("SftpClient upload", () => {
     expect(outcome.error?.message).toBe("sftp not available for this session");
   });
 });
+
+describe("SftpClient download", () => {
+  it("downloads a remote file into a writable", async () => {
+    const { server, sftp } = await setup();
+    await import("node:fs/promises").then(async (fs) => {
+      await fs.mkdir(path.join(server.sftpRoot, "d"), { recursive: true });
+      await fs.writeFile(path.join(server.sftpRoot, "d", "a.txt"), "downloaded");
+    });
+    const chunks: Buffer[] = [];
+    const { Writable } = await import("node:stream");
+    const dst = new Writable({
+      write(chunk, _enc, cb) { chunks.push(Buffer.from(chunk)); cb(); },
+    });
+    const outcome = await sftp.download("/d/a.txt", dst);
+    expect(outcome).toEqual({ bytes: 10, timedOut: false });
+    expect(Buffer.concat(chunks).toString()).toBe("downloaded");
+  });
+
+  it("reports open-remote errors", async () => {
+    const { sftp } = await setup();
+    const { Writable } = await import("node:stream");
+    const outcome = await sftp.download("/missing", new Writable({
+      write(_c, _e, cb) { cb(); },
+    }));
+    expect(outcome.bytes).toBe(0);
+    expect(outcome.error?.message).toMatch(/^open remote \/missing: /);
+  });
+
+  it("downloads atomically to a local file and cleans the temp", async () => {
+    const { server, dir, sftp } = await setup();
+    await import("node:fs/promises").then((fs) =>
+      fs.writeFile(path.join(server.sftpRoot, "remote.txt"), "atomic"));
+    const target = path.join(dir, "local.txt");
+    const outcome = await sftp.downloadToFile("/remote.txt", target);
+    expect(outcome).toEqual({ bytes: 6, timedOut: false });
+    expect(await readFile(target, "utf8")).toBe("atomic");
+    const names = await import("node:fs/promises").then((fs) => fs.readdir(dir));
+    expect(names.filter((name) => name.includes(".sshmng-tmp-"))).toEqual([]);
+  });
+
+  it("times out without leaving a half-written local file", async () => {
+    const { server, dir, sftp } = await setup({ allowSftp: true, sftpDelayMs: 200 });
+    await import("node:fs/promises").then((fs) =>
+      fs.writeFile(path.join(server.sftpRoot, "big.bin"), "x".repeat(100_000)));
+    const target = path.join(dir, "big.bin");
+    const outcome = await sftp.downloadToFile("/big.bin", target, 50);
+    expect(outcome.timedOut).toBe(true);
+    await expect(stat(target)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});
