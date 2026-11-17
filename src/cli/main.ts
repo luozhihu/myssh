@@ -1,18 +1,14 @@
 import { resolveConfigPath, Store } from "../config/store.js";
+import { takeConfigFlag } from "./flags.js";
 import { Service } from "../mcp/service.js";
 import { runStdioServer } from "../mcp/server.js";
 import { BUILD_DATE, COMMIT, goArch, goOS, VERSION } from "../version.js";
 import { runEntityCmd } from "./entity_cmd.js";
+import { runSSHCmd } from "./ssh_cmd.js";
+import { defaultIO } from "./io.js";
+import type { IO } from "./io.js";
 
-export interface IO {
-  out: (text: string) => void;
-  err: (text: string) => void;
-}
-
-const defaultIO: IO = {
-  out: (text) => process.stdout.write(text),
-  err: (text) => process.stderr.write(text),
-};
+export type { IO };
 
 const helpText = `myssh - SSH session manager
 
@@ -28,27 +24,6 @@ Usage:
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function takeConfigFlag(args: string[]): { config?: string; rest: string[] } {
-  const rest: string[] = [];
-  let config: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]!;
-    if (arg === "--config") {
-      const value = args[i + 1];
-      if (!value) {
-        throw new Error("--config requires a path");
-      }
-      config = value;
-      i += 1;
-    } else if (arg.startsWith("--config=")) {
-      config = arg.slice("--config=".length);
-    } else {
-      rest.push(arg);
-    }
-  }
-  return { config, rest };
 }
 
 export async function main(args: string[], io: IO = defaultIO): Promise<number> {
@@ -86,6 +61,8 @@ export async function main(args: string[], io: IO = defaultIO): Promise<number> 
       return runEntityCmd("jumphost", args.slice(1), io);
     case "proxy":
       return runEntityCmd("proxy", args.slice(1), io);
+    case "ssh":
+      return runSSHCmd(args.slice(1), io);
     default:
       io.out(`Unknown command ${JSON.stringify(args[0])}. Run 'myssh help' for usage.\n`);
       return 2;
